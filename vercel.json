@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/models/:path*",
+      "destination": "https://unlimited.waifu2x.net/models/:path*"
+    }
+  ]
+}

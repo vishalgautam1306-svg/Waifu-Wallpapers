@@ -1,80 +1,50 @@
-// Waifu Wallpapers public gallery API: Cloudflare Worker + R2 + D1.
-// Public uploads are OFF unless Turnstile is configured. Nothing is public until approved.
-const CATEGORIES = new Set(["anime", "oled", "fantasy", "scifi", "other"]);
-const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
-const MAX_THUMB_BYTES = 350 * 1024;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function allowedOrigins(env) {
-  return (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
+// Waifu Wallpapers V5 catalog API.
+// Public users can only READ approved originals and thumbnails.
+// All uploads, metadata edits and publication changes require ADMIN_TOKEN on the server.
+// There is deliberately NO public upload route, no user-facing credentials, and no token in frontend source.
+const MAX_IMAGE = 15 * 1024 * 1024;
+const MAX_THUMB = 500 * 1024;
+const CAT = new Set(["anime","oled","fantasy","scifi","nature","aesthetic","minimal","abstract","movies","3d","other"]);
+const allowedOrigins = env => (env.ALLOWED_ORIGINS || "").split(",").map(x=>x.trim()).filter(Boolean);
+const cors = (request,env) => {
+ const h = new Headers({"Vary":"Origin","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"});
+ const origin=request.headers.get("Origin");
+ if(origin && allowedOrigins(env).includes(origin)){
+   h.set("Access-Control-Allow-Origin",origin);
+   h.set("Access-Control-Allow-Methods","GET,HEAD,POST,PATCH,DELETE,OPTIONS");
+   h.set("Access-Control-Allow-Headers","Authorization,Content-Type");
+   h.set("Access-Control-Max-Age","600");
+ }
+ return h;
+};
+const reply=(request,env,data,status=200)=>{
+ const headers=cors(request,env);headers.set("Content-Type","application/json; charset=utf-8");headers.set("Cache-Control","no-store");
+ return new Response(JSON.stringify(data),{status,headers});
+};
+const fail=(request,env,status,message)=>reply(request,env,{error:message},status);
+function secureEqual(a,b){
+ a=String(a||"");b=String(b||"");let n=a.length^b.length;
+ for(let i=0;i<Math.max(a.length,b.length);i++)n|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
+ return n===0&&a.length>0;
 }
-function corsHeaders(request, env) {
-  const origin = request.headers.get("Origin") || "";
-  const headers = new Headers({
-    "Vary": "Origin",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer"
-  });
-  if (origin && allowedOrigins(env).includes(origin)) {
-    headers.set("Access-Control-Allow-Origin", origin);
-    headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
-    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    headers.set("Access-Control-Max-Age", "600");
-  }
-  return headers;
+function authorized(request,env){
+ const incoming=(request.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");
+ // A long random value is required. This is a secret configured in Cloudflare, never inside JS.
+ return !!env.ADMIN_TOKEN && String(env.ADMIN_TOKEN).length>=32 && secureEqual(incoming,env.ADMIN_TOKEN);
 }
-function json(request, env, data, status = 200, extra = {}) {
-  const headers = corsHeaders(request, env);
-  headers.set("Content-Type", "application/json; charset=utf-8");
-  headers.set("Cache-Control", "no-store");
-  Object.entries(extra).forEach(([key, value]) => headers.set(key, value));
-  return new Response(JSON.stringify(data), {status, headers});
+function ensureAdmin(request,env){return authorized(request,env)?null:fail(request,env,401,"Admin authentication required");}
+function text(value,n=120){return String(value??"").replace(/[<>\u0000-\u001f\u007f]/g,"").trim().slice(0,n);}
+function tags(value){
+ const arr=Array.isArray(value)?value:String(value||"").split(",");
+ return [...new Set(arr.map(x=>text(x,40).replace(/^#/,"").toLowerCase()).filter(Boolean))].slice(0,25);
 }
-function error(request, env, status, message) {
-  return json(request, env, {error: message}, status);
-}
-function checkOrigin(request, env) {
-  const origin = request.headers.get("Origin");
-  return !!origin && allowedOrigins(env).includes(origin);
-}
-function safeTitle(value) {
-  return String(value || "").replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 90);
-}
-function safeCategory(value) {
-  return CATEGORIES.has(value) ? value : "other";
-}
-function equalToken(a, b) {
-  const x = String(a || ""), y = String(b || "");
-  let mismatch = x.length ^ y.length;
-  const size = Math.max(x.length, y.length);
-  for (let i = 0; i < size; i++) mismatch |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
-  return mismatch === 0 && x.length > 0;
-}
-function isAdmin(request, env) {
-  const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  return !!env.ADMIN_TOKEN && equalToken(token, env.ADMIN_TOKEN);
-}
-async function ipHash(request, env) {
-  const value = (request.headers.get("CF-Connecting-IP") || "unknown") + "|" + env.IP_HASH_SALT;
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(bytes)).map(v => v.toString(16).padStart(2, "0")).join("");
-}
-async function verifyTurnstile(request, env, token) {
-  if (!env.TURNSTILE_SECRET_KEY || !token) return false;
-  const body = new FormData();
-  body.append("secret", env.TURNSTILE_SECRET_KEY);
-  body.append("response", String(token));
-  const ip = request.headers.get("CF-Connecting-IP");
-  if (ip) body.append("remoteip", ip);
-  try {
-    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST", body, signal: AbortSignal.timeout(8000)
-    });
-    if (!response.ok) return false;
-    const result = await response.json();
-    const origin = new URL(request.headers.get("Origin"));
-    return result.success === true && result.hostname === origin.hostname;
-  } catch (_) { return false; }
+function idOK(id){return /^[a-f\d-]{36}$/i.test(id);}
+function fields(row){
+ let ts=[];try{ts=JSON.parse(row.tags_json||"[]");}catch(_){}
+ return {id:row.id,title:row.title,description:row.description||"",series:row.series||"",category:row.category,
+ tags:ts,width:row.width,height:row.height,mime:row.mime,size:row.size,status:row.status,
+ createdAt:row.created_at,updatedAt:row.updated_at,
+ thumbnail:"/api/wallpapers/"+row.id+"/thumb",original:"/api/wallpapers/"+row.id+"/original"};
 }
 function sniffMime(bytes) {
   if (bytes.length >= 24 &&
@@ -132,165 +102,121 @@ function saneDimensions(dims) {
   return Number.isInteger(w) && Number.isInteger(h) && w >= 64 && h >= 64 &&
     w <= 14000 && h <= 14000 && w * h <= 48_000_000;
 }
-function encodeCursor(row) {
-  if (!row) return null;
-  return btoa(String(row.created_at) + ":" + row.id).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/,"");
-}
-function decodeCursor(s) {
-  if (!s) return null;
-  try {
-    const value = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-    const index = value.indexOf(":");
-    const stamp = Number(value.slice(0, index));
-    const id = value.slice(index + 1);
-    return index > 0 && Number.isSafeInteger(stamp) && stamp > 0 &&
-      /^[0-9a-f-]{36}$/i.test(id) ? {created_at: stamp, id} : null;
-  } catch (_) { return null; }
-}
-function publicItem(row) {
-  return {
-    id: row.id, title: row.title, category: row.category,
-    width: row.width, height: row.height,
-    mime: row.mime, size: row.size, createdAt: row.created_at,
-    thumbnail: "/api/wallpapers/" + row.id + "/thumb",
-    original: "/api/wallpapers/" + row.id + "/original"
-  };
-}
-async function gallery(request, env) {
-  const url = new URL(request.url);
-  const limit = Math.min(24, Math.max(1, Number(url.searchParams.get("limit")) || 12));
-  const key = url.searchParams.get("cursor");
-  const cursor = decodeCursor(key);
-  if (key && !cursor) return error(request, env, 400, "Invalid cursor");
-  let statement;
-  if (cursor) {
-    statement = env.DB.prepare("SELECT id,title,category,width,height,mime,size,created_at FROM wallpapers WHERE status='approved' AND (created_at < ?1 OR (created_at = ?1 AND id < ?2)) ORDER BY created_at DESC, id DESC LIMIT ?3").bind(cursor.created_at, cursor.id, limit + 1);
-  } else {
-    statement = env.DB.prepare("SELECT id,title,category,width,height,mime,size,created_at FROM wallpapers WHERE status='approved' ORDER BY created_at DESC, id DESC LIMIT ?1").bind(limit + 1);
-  }
-  const result = await statement.all();
-  const rows = result.results || [];
-  const hasMore = rows.length > limit;
-  const shown = rows.slice(0, limit);
-  return json(request, env, {items: shown.map(publicItem), nextCursor: hasMore ? encodeCursor(shown.at(-1)) : null});
-}
-async function picture(request, env, id, variant, adminOnly = false) {
-  const row = await env.DB.prepare("SELECT original_key,thumb_key,mime,status FROM wallpapers WHERE id = ?").bind(id).first();
-  if (!row || (adminOnly ? !isAdmin(request, env) : row.status !== "approved")) return error(request, env, 404, "Wallpaper not found");
-  const key = variant === "original" ? row.original_key : row.thumb_key;
-  if (!key) return error(request, env, 404, "Image not found");
-  const item = await env.IMAGES.get(key);
-  if (!item) return error(request, env, 404, "Image not found");
-  const headers = corsHeaders(request, env);
-  headers.set("Content-Type", variant === "original" ? row.mime : (item.httpMetadata?.contentType || "image/webp"));
-  headers.set("Cache-Control", adminOnly ? "no-store" : "public, max-age=60");
-  headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
-  if (item.size) headers.set("Content-Length", String(item.size));
-  return new Response(request.method === "HEAD" ? null : item.body, {status: 200, headers});
-}
-async function submit(request, env) {
-  if (!checkOrigin(request, env)) return error(request, env, 403, "Origin is not allowed");
-  if (!env.TURNSTILE_SECRET_KEY || !env.TURNSTILE_SITE_KEY || !env.IP_HASH_SALT) {
-    return error(request, env, 503, "Public submissions are not enabled");
-  }
-  const headerSize = Number(request.headers.get("Content-Length"));
-  if (headerSize > MAX_ORIGINAL_BYTES + MAX_THUMB_BYTES + 100000) return error(request, env, 413, "Upload is too large");
-  if (!(request.headers.get("Content-Type") || "").startsWith("multipart/form-data")) return error(request, env, 415, "Multipart form required");
 
-  const form = await request.formData();
-  const token = form.get("cf-turnstile-response") || form.get("turnstileToken");
-  if (!await verifyTurnstile(request, env, token)) return error(request, env, 403, "Verification failed. Try again");
-  const ip = await ipHash(request, env);
-  const now = Date.now();
-  const usage = await env.DB.prepare("SELECT COUNT(*) AS count FROM wallpapers WHERE ip_hash = ? AND created_at >= ?")
-    .bind(ip, now - DAY_MS).first();
-  if ((usage?.count || 0) >= 5) return error(request, env, 429, "Daily submission limit reached");
-
-  const original = form.get("image");
-  const thumb = form.get("thumbnail");
-  if (!(original instanceof File) || !(thumb instanceof File)) return error(request, env, 400, "An image and preview thumbnail are required");
-  if (original.size < 100 || original.size > MAX_ORIGINAL_BYTES ||
-      thumb.size < 100 || thumb.size > MAX_THUMB_BYTES) return error(request, env, 413, "Image exceeds upload limits");
-  const originalBytes = new Uint8Array(await original.arrayBuffer());
-  const thumbBytes = new Uint8Array(await thumb.arrayBuffer());
-  const mime = sniffMime(originalBytes), thumbMime = sniffMime(thumbBytes);
-  if (!mime || !thumbMime) return error(request, env, 415, "Only valid PNG, JPEG and WebP images are accepted");
-  const [w, h] = dimensions(originalBytes, mime) || [];
-  if (!saneDimensions([w, h])) return error(request, env, 400, "Invalid or unsupported image dimensions");
-  const title = safeTitle(form.get("title") || original.name);
-  if (title.length < 2) return error(request, env, 400, "Enter a wallpaper title");
-  const category = safeCategory(form.get("category"));
-
-  const id = crypto.randomUUID(), ext = {"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
-  const originalKey = "originals/" + id + "." + ext[mime];
-  const thumbKey = "thumbnails/" + id + "." + ext[thumbMime];
-  const http = type => ({httpMetadata: {contentType: type}});
-  await env.IMAGES.put(originalKey, originalBytes, http(mime));
-  try {
-    await env.IMAGES.put(thumbKey, thumbBytes, http(thumbMime));
-    await env.DB.prepare("INSERT INTO wallpapers (id,title,category,width,height,mime,size,original_key,thumb_key,status,created_at,ip_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-      .bind(id,title,category,w,h,mime,original.size,originalKey,thumbKey,"pending",now,ip).run();
-  } catch (e) {
-    await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
-    throw e;
-  }
-  return json(request, env, {message:"Submitted for review", status:"pending", id}, 202);
+async function listPublic(request,env){
+ const params=new URL(request.url).searchParams;
+ const limit=Math.min(60,Math.max(1,Number(params.get("limit"))||24));
+ const page=Math.min(1000,Math.max(0,Number(params.get("page"))||0));
+ const search=text(params.get("q"),90).toLowerCase();
+ const category=text(params.get("category"),30);
+ const series=text(params.get("series"),80).toLowerCase();
+ const tag=text(params.get("tag"),40).toLowerCase().replace(/^#/,"");
+ const where=["status='approved'"],bind=[];
+ if(search){where.push("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(series) LIKE ? OR LOWER(tags_json) LIKE ?)");for(let i=0;i<4;i++)bind.push("%"+search+"%");}
+ if(CAT.has(category)){where.push("category=?");bind.push(category);}
+ if(series){where.push("LOWER(series)=?");bind.push(series);}
+ if(tag){where.push("LOWER(tags_json) LIKE ?");bind.push("%"+tag+"%");}
+ const sql="SELECT * FROM wallpapers WHERE "+where.join(" AND ")+" ORDER BY created_at DESC LIMIT ? OFFSET ?";
+ const result=await env.DB.prepare(sql).bind(...bind,limit+1,page*limit).all();
+ const rows=result.results||[];
+ return reply(request,env,{items:rows.slice(0,limit).map(fields),page,nextPage:rows.length>limit?page+1:null});
 }
-async function listPending(request, env) {
-  const rows = await env.DB.prepare("SELECT id,title,category,width,height,mime,size,status,created_at FROM wallpapers WHERE status='pending' ORDER BY created_at ASC LIMIT 50").all();
-  return json(request, env, {items:(rows.results || []).map(r => ({...publicItem(r), status:r.status,
-    reviewThumb:"/api/admin/wallpapers/"+r.id+"/thumb"}))});
+async function listAdmin(request,env){
+ const status=new URL(request.url).searchParams.get("status")||"draft";
+ const valid=["draft","approved","removed","all"].includes(status)?status:"draft";
+ const sql=valid==="all"?"SELECT * FROM wallpapers ORDER BY created_at DESC LIMIT 150":"SELECT * FROM wallpapers WHERE status=? ORDER BY created_at DESC LIMIT 150";
+ const r=valid==="all"?await env.DB.prepare(sql).all():await env.DB.prepare(sql).bind(valid).all();
+ return reply(request,env,{items:(r.results||[]).map(fields)});
 }
-async function decision(request, env, id) {
-  const row = await env.DB.prepare("SELECT status,original_key,thumb_key FROM wallpapers WHERE id=?").bind(id).first();
-  if (!row) return error(request, env, 404, "Wallpaper not found");
-  const body = await request.json().catch(() => null);
-  const action = body?.action;
-  if (!["approve","reject","remove"].includes(action)) return error(request, env, 400, "Invalid action");
-  if ((action==="approve" || action==="reject") && row.status !== "pending") return error(request, env, 409, "Submission is not pending");
-  if (action==="remove" && row.status !== "approved") return error(request, env, 409, "Wallpaper is not published");
-
-  const status = action==="approve" ? "approved" : action==="reject" ? "rejected" : "removed";
-  await env.DB.prepare("UPDATE wallpapers SET status=? WHERE id=?").bind(status,id).run();
-  if (status!=="approved") {
-    // Keep metadata for audit and anti-abuse counts. Remove unneeded original data.
-    await Promise.allSettled([env.IMAGES.delete(row.original_key),env.IMAGES.delete(row.thumb_key)]);
-  }
-  return json(request, env, {id,status});
+async function getImage(request,env,id,kind){
+ const row=await env.DB.prepare("SELECT status,original_key,thumb_key,mime FROM wallpapers WHERE id=?").bind(id).first();
+ if(!row||row.status!=="approved")return fail(request,env,404,"Not found");
+ const entry=await env.IMAGES.get(kind==="thumb"?row.thumb_key:row.original_key);
+ if(!entry)return fail(request,env,404,"Not found");
+ const headers=cors(request,env);
+ headers.set("Content-Type",kind==="thumb"?(entry.httpMetadata?.contentType||"image/webp"):row.mime);
+ headers.set("Cache-Control","public, max-age=300");
+ headers.set("Content-Security-Policy","default-src 'none'; sandbox");
+ return new Response(request.method==="HEAD"?null:entry.body,{status:200,headers});
+}
+async function upload(request,env){
+ const header=Number(request.headers.get("Content-Length"));
+ if(header>MAX_IMAGE+MAX_THUMB+200000)return fail(request,env,413,"Upload exceeds 15 MB image limit");
+ if(!(request.headers.get("Content-Type")||"").startsWith("multipart/form-data"))return fail(request,env,415,"Multipart required");
+ const form=await request.formData();
+ const file=form.get("image"),thumb=form.get("thumbnail");
+ if(!(file instanceof File)||!(thumb instanceof File))return fail(request,env,400,"Image and thumbnail required");
+ if(file.size<100||file.size>MAX_IMAGE||thumb.size<50||thumb.size>MAX_THUMB)return fail(request,env,413,"Image or thumbnail exceeds size limit");
+ const bytes=new Uint8Array(await file.arrayBuffer()),thumbBytes=new Uint8Array(await thumb.arrayBuffer());
+ const mime=sniffMime(bytes),tMime=sniffMime(thumbBytes);
+ if(!mime||!tMime)return fail(request,env,415,"Only real PNG/JPEG/WebP image files permitted");
+ const dim=dimensions(bytes,mime);
+ if(!saneDimensions(dim))return fail(request,env,400,"Invalid dimensions");
+ const title=text(form.get("title")||file.name,90);
+ if(!title)return fail(request,env,400,"Title required");
+ const category=CAT.has(form.get("category"))?form.get("category"):"other";
+ const description=text(form.get("description"),450);
+ const series=text(form.get("series"),100);
+ const tagList=tags(form.get("tags"));
+ const id=crypto.randomUUID(),now=Date.now();
+ const ext={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
+ const originalKey="originals/"+id+"."+ext[mime],thumbKey="thumbs/"+id+"."+ext[tMime];
+ await env.IMAGES.put(originalKey,bytes,{httpMetadata:{contentType:mime}});
+ try{
+  await env.IMAGES.put(thumbKey,thumbBytes,{httpMetadata:{contentType:tMime}});
+  await env.DB.prepare("INSERT INTO wallpapers(id,title,description,series,category,tags_json,width,height,mime,size,original_key,thumb_key,status,created_at,updated_at,ip_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id,title,description,series,category,JSON.stringify(tagList),dim[0],dim[1],mime,file.size,originalKey,thumbKey,"draft",now,now,"admin").run();
+ }catch(error){
+  await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
+  throw error;
+ }
+ return reply(request,env,{id,status:"draft",message:"Added to private admin drafts"},201);
+}
+async function edit(request,env,id){
+ const row=await env.DB.prepare("SELECT * FROM wallpapers WHERE id=?").bind(id).first();
+ if(!row)return fail(request,env,404,"Not found");
+ const body=await request.json().catch(()=>null);
+ if(!body||typeof body!=="object")return fail(request,env,400,"Expected JSON metadata");
+ const title=text(body.title??row.title,90),desc=text(body.description??row.description,450),series=text(body.series??row.series,100);
+ if(!title)return fail(request,env,400,"Title required");
+ const category=CAT.has(body.category)?body.category:row.category;
+ const tagList=body.tags===undefined?JSON.parse(row.tags_json||"[]"):tags(body.tags);
+ await env.DB.prepare("UPDATE wallpapers SET title=?,description=?,series=?,category=?,tags_json=?,updated_at=? WHERE id=?")
+  .bind(title,desc,series,category,JSON.stringify(tagList),Date.now(),id).run();
+ return reply(request,env,{id,message:"Updated"});
+}
+async function change(request,env,id){
+ const row=await env.DB.prepare("SELECT * FROM wallpapers WHERE id=?").bind(id).first();
+ if(!row)return fail(request,env,404,"Not found");
+ const body=await request.json().catch(()=>null);
+ if(!["draft","approved","removed"].includes(body?.status))return fail(request,env,400,"Invalid status");
+ await env.DB.prepare("UPDATE wallpapers SET status=?,updated_at=? WHERE id=?").bind(body.status,Date.now(),id).run();
+ return reply(request,env,{id,status:body.status});
 }
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, "") || "/";
-    if (request.method === "OPTIONS") {
-      const headers = corsHeaders(request, env);
-      if (!headers.has("Access-Control-Allow-Origin")) return new Response(null, {status:403});
-      return new Response(null, {status:204,headers});
-    }
-    try {
-      if (path === "/api/health" && request.method === "GET") return json(request,env,{ok:true,storage:"cloudflare-r2",version:1});
-      if (path === "/api/config" && request.method === "GET") return json(request,env,{
-        publicUploadsEnabled:!!(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET_KEY && env.IP_HASH_SALT),
-        turnstileSiteKey:env.TURNSTILE_SITE_KEY || null,
-        maxOriginalBytes:MAX_ORIGINAL_BYTES
-      });
-      if (path === "/api/gallery" && request.method === "GET") return gallery(request,env);
-      const pic = /^\/api\/wallpapers\/([0-9a-f-]{36})\/(original|thumb)$/.exec(path);
-      if (pic && (request.method === "GET" || request.method === "HEAD")) return picture(request,env,pic[1],pic[2]);
-      if (path === "/api/submissions" && request.method === "POST") return submit(request,env);
-
-      if (path.startsWith("/api/admin/")) {
-        if (!isAdmin(request,env)) return error(request,env,401,"Admin access required");
-        if (path === "/api/admin/pending" && request.method === "GET") return listPending(request,env);
-        const preview = /^\/api\/admin\/wallpapers\/([0-9a-f-]{36})\/thumb$/.exec(path);
-        if (preview && request.method==="GET") return picture(request,env,preview[1],"thumb",true);
-        const mod = /^\/api\/admin\/wallpapers\/([0-9a-f-]{36})\/decision$/.exec(path);
-        if (mod && request.method==="POST") return decision(request,env,mod[1]);
-      }
-      return error(request,env,404,"Not found");
-    } catch (e) {
-      console.error("API failure", e?.message || e);
-      return error(request,env,500,"Internal error");
-    }
+ async fetch(request,env){
+  const url=new URL(request.url),path=url.pathname.replace(/\/+$/,"")||"/";
+  if(request.method==="OPTIONS"){
+   const h=cors(request,env);
+   return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
+  try{
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:5});
+   if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true});
+   if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
+   const pic=/^\/api\/wallpapers\/([\da-f-]{36})\/(original|thumb)$/.exec(path);
+   if(pic&&["GET","HEAD"].includes(request.method))return getImage(request,env,pic[1],pic[2]);
+   if(path.startsWith("/api/admin/")){
+    const denied=ensureAdmin(request,env);
+    if(denied)return denied;
+    if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true});
+    if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);
+    if(path==="/api/admin/upload"&&request.method==="POST")return upload(request,env);
+    const editPath=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);
+    if(editPath&&request.method==="PATCH")return edit(request,env,editPath[1]);
+    if(editPath&&request.method==="POST")return change(request,env,editPath[1]);
+   }
+   return fail(request,env,404,"Not found");
+  }catch(e){console.error("Worker V5 error:",e?.message);return fail(request,env,500,"Internal error");}
+ }
 };

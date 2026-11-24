@@ -21,3 +21,37 @@ body{background:radial-gradient(ellipse at 84% 10%,#573b8c45,transparent 35%),#0
 .modal{background:#181229;border-color:#b99ada55}.detail-image{background:#070510}.detail-info h2{color:#eeddfd}.stat-row strong{color:#f0deff}.detail-category{color:#bba4e8}
 @media(max-width:1200px){.wall-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:760px){.community-hero{padding:60px 5.2% 65px}.community-hero h1{font-size:56px}.wall-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.public-filter-row input{flex-basis:100%}.public-filter-row select{flex:1}}
+
+
+/* V6 anime discovery: category worlds, airy catalog and responsive filters */
+.community-hero{min-height:455px;background:
+radial-gradient(ellipse at 75% 35%,#be76e75a 0,transparent 35%),
+radial-gradient(circle at 86% 26%,#f8bee535 0,transparent 21%),
+linear-gradient(120deg,#17102f,#261a4a 63%,#171630);
+border-bottom:1px solid #d2baff22}
+.community-hero:before{content:"";position:absolute;right:7%;top:12%;width:min(31vw,370px);aspect-ratio:3/4;border-radius:49% 49% 16px 16px;transform:rotate(8deg);border:1px solid #e7d3ff55;box-shadow:0 0 0 13px #d6aaff0a,0 24px 85px #0c092b;background:
+radial-gradient(circle at 50% 31%,#ffe7fa 0 18%,#fff2ff 18.2%,transparent 18.6%),
+radial-gradient(ellipse at 50% 68%,#e387c66b 0,transparent 49%),
+linear-gradient(180deg,#1e215e,#7e53ae 50%,#d477c6 77%,#202149)}
+.community-hero:after{content:"夢";position:absolute;right:11%;bottom:18%;font:600 82px serif;color:#fff7ff5e;transform:rotate(8deg);pointer-events:none}
+.community-hero>*,.community-hero .eyebrow{position:relative;z-index:2}
+.community-hero h1{max-width:800px;font-size:clamp(54px,7.6vw,109px);text-shadow:0 3px 45px #08051659}
+.community-hero p{max-width:580px;color:#dad1f0;font-size:15px}
+.genre-section{max-width:1550px;padding:48px 5.2% 36px;margin:auto}
+.genre-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:22px}
+.genre-head h2{font:800 clamp(30px,3vw,48px)/1.2 Outfit,sans-serif;letter-spacing:-.06em;margin:8px 0 0}
+.genre-head h2 em{font-style:normal;color:#d5acfc}
+.genre-head>span{font-size:11px;letter-spacing:.06em;color:#9486ab;padding-bottom:5px}
+.genre-scroll{display:flex;gap:11px;overflow-x:auto;overscroll-behavior-x:contain;padding:4px 3px 18px;scroll-snap-type:x mandatory;scrollbar-color:#6e508c transparent}
+.genre{width:125px;min-width:125px;min-height:112px;border:1px solid #cbb0ee32;border-radius:13px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:11px;cursor:pointer;background:linear-gradient(140deg,#2e234b,#1a1631);color:#f4e7ff;scroll-snap-align:start;transition:transform .2s,border-color .2s,background .2s}
+.genre:nth-child(4n+2){background:linear-gradient(150deg,#5b3a7b,#271d48)}
+.genre:nth-child(4n+3){background:linear-gradient(145deg,#51476f,#1d263c)}
+.genre:nth-child(4n+4){background:linear-gradient(145deg,#51345e,#271933)}
+.genre:hover{transform:translateY(-3px);border-color:#e7b9fd}
+.genre.active{border-color:#e5b5fc;box-shadow:inset 0 0 0 1px #e5b5fc,0 11px 28px #8b4dcb2d}
+.genre i{font-style:normal;font-size:40px;line-height:1;text-shadow:0 0 24px #dfb5fc7d;color:#efd1ff}
+.genre strong{font-size:11px;white-space:nowrap}
+.collection{padding-top:40px}.wall-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.wallcard .image-wrap{aspect-ratio:3/4}
+@media(max-width:850px){.community-hero:before{opacity:.34;right:-80px}.community-hero:after{opacity:.32}.community-hero h1{font-size:clamp(44px,9vw,77px)}.genre{min-width:108px;width:108px;min-height:103px}}
+@media(max-width:650px){.community-hero{min-height:405px;padding:60px 5.2% 55px}.community-hero:before{width:260px;right:-110px;top:15%;opacity:.24}.community-hero:after{display:none}.community-hero h1{font-size:54px}.community-hero p{font-size:12px;line-height:1.9}.genre-section{padding-top:30px;padding-bottom:5px}.genre-head>span{display:none}.genre{min-width:105px;width:105px;min-height:99px}.genre i{font-size:33px}.wall-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

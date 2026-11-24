@@ -180,7 +180,7 @@ function launchAI(scale) {
   // Both the gallery and original lab use the same origin and IndexedDB.
   // The lab reads the ID and pre-selects the image: no second file picker.
   const id=encodeURIComponent(selected.id);
-  window.location.assign('./index.html?fromGallery='+id+'&scale='+scale);
+  window.location.assign('./ai.html?fromGallery='+id+'&scale='+scale);
 }
 async function removeSelected() {
   if(!selected)return;

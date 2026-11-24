@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#080914">
+<meta name="description" content="Discover and share anime wallpapers, download originals or enhance locally with AI 2× and 4×.">
+<title>Community | Waifu Wallpapers</title>
+<link rel="stylesheet" href="./gallery.css">
+<link rel="stylesheet" href="./community.css">
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+<script src="./community-config.js"></script>
+<script src="./community.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="./gallery.html"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
+  <nav class="desktop-nav" aria-label="Primary"><a href="./gallery.html">Local collection</a><a href="./index.html">AI studio</a><a href="#feed">Explore</a></nav>
+  <button type="button" class="button button-small button-accent" id="uploadOpen">＋ Submit art</button>
+</header>
+<main>
+  <section class="community-hero">
+    <span class="eyebrow"><span class="pulse"></span> THE COMMUNITY COLLECTION</span>
+    <h1>Art worth <em>sharing.</em></h1>
+    <p>One original, infinite possibilities. Discover wallpapers, download the original, or let your device enhance it to 2× and 4×—without storing giant copies.</p>
+    <div class="hero-actions"><a class="button button-accent" href="#feed">Explore wallpapers ↗</a><a class="button button-secondary" href="./index.html">AI upscaler ✦</a></div>
+  </section>
+  <div class="notice community-notice" role="status"><span class="notice-dot">●</span><p id="connectionState">Connecting to wallpaper storage…</p></div>
+  <section class="collection" id="feed" aria-labelledby="feed-heading">
+    <div class="section-top"><div><div class="kicker">PUBLIC COLLECTION / ORIGINALS</div><h2 id="feed-heading">Discover the <em>archive.</em></h2><p>Only reviewed wallpapers are visible here. Every AI enhancement runs locally on your device.</p></div></div>
+    <div class="wall-grid" id="publicGrid" aria-live="polite"></div>
+    <div id="publicEmpty" class="empty-state"><div class="empty-art" aria-hidden="true"><span>✧</span><b>夜</b></div><div class="empty-copy"><div class="kicker">THE ARCHIVE</div><h3 id="emptyTitle">Connecting to storage</h3><p id="emptyDesc">Preparing the shared collection.</p><button type="button" class="button button-accent" id="emptyUpload">Submit a wallpaper</button></div></div>
+    <div class="load-row"><button type="button" id="loadMore" class="button button-secondary" hidden>Load more wallpapers ↓</button></div>
+  </section>
+  <section class="feature-strip"><div><span class="feat-icon">01</span><h3>Stored as originals</h3><p>Only compressed originals and preview thumbnails live in the cloud.</p></div><div><span class="feat-icon">02</span><h3>Community reviewed</h3><p>Submissions stay private until approved. No accounts needed.</p></div><div><span class="feat-icon">03</span><h3>AI on your device</h3><p>2× or 4× downloads are created when requested, without extra cloud storage.</p></div></section>
+</main>
+<footer><span>✦ WAIFU WALLPAPERS</span><p>Share only artwork you have permission to publish. Public submissions are moderated.</p><a href="./index.html">AI Studio ↗</a></footer>
+<dialog id="submitDialog" class="modal" aria-labelledby="submitHeading">
+ <div class="modal-head"><div><div class="kicker">SEND TO THE ARCHIVE</div><h2 id="submitHeading">Submit a wallpaper.</h2></div><button type="button" class="close" id="submitClose" aria-label="Close">×</button></div>
+ <form id="submitForm">
+  <label class="field-label" for="submitImage">Original image (PNG, JPG, WebP; maximum 10 MB)</label><input id="submitImage" type="file" accept="image/png,image/jpeg,image/webp" required>
+  <label class="field-label" for="submitTitle">Wallpaper title</label><input id="submitTitle" type="text" maxlength="90" required placeholder="e.g. Midnight Sakura">
+  <label class="field-label" for="submitCategory">Category</label><select id="submitCategory"><option value="anime">Anime</option><option value="oled">Dark / OLED</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="other">Other</option></select>
+  <p class="form-note">This upload is private until an admin approves it. Do not submit copyrighted artwork you aren't authorized to share or illegal content.</p>
+  <div id="turnstileBox" class="captcha" aria-label="Human verification"></div>
+  <p role="status" aria-live="polite" id="submitStatus"></p>
+  <button type="submit" class="button button-accent full" id="submitButton">Send for review</button>
+ </form>
+</dialog>
+<dialog id="publicDetail" class="modal detail-modal" aria-labelledby="publicTitle">
+ <button class="close detail-close" type="button" id="publicClose" aria-label="Close wallpaper">×</button>
+ <div class="detail-grid"><div class="detail-image"><img id="publicImage" alt="Wallpaper preview"></div><div class="detail-info">
+  <div class="kicker">COMMUNITY WALLPAPER</div><h2 id="publicTitle"></h2><div class="detail-category" id="publicCategory"></div>
+  <div class="stat-row"><span>Resolution</span><strong id="publicRes"></strong></div>
+  <div class="stat-row"><span>Original size</span><strong id="publicSize"></strong></div>
+  <div class="detail-actions"><button type="button" class="button button-secondary full" id="publicOriginal">↓ Download original</button><button type="button" class="button button-accent full" id="public2x">✦ Enhance with AI · 2×</button><button type="button" class="button button-accent full" id="public4x">✦ Enhance with AI · 4×</button></div>
+  <p role="status" id="downloadStatus" class="detail-note" aria-live="polite">Enhancement runs locally. Keep the AI tab open until it finishes.</p>
+ </div></div>
+</dialog>
+</body>
+</html>

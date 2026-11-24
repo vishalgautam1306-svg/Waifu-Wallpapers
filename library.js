@@ -1,7 +1,7 @@
 import { makeBatchZip, cancelBatchWork, capabilities } from "./library-batch.js";
 const DB_NAME="waifu-wallpapers-preview", STORE="wallpapers";
-const MAX_IMPORT=100, MAX_FILE=10*1024*1024;
-const LABELS={anime:"Anime",oled:"OLED / Dark",fantasy:"Fantasy",scifi:"Sci-Fi",other:"Other"};
+const MAX_IMPORT=500, MAX_FILE=15*1024*1024;
+const LABELS={anime:"Anime",oled:"OLED / Dark",fantasy:"Fantasy",scifi:"Sci-Fi",nature:"Nature & scenery",aesthetic:"Aesthetic",minimal:"Minimal",abstract:"Abstract",movies:"Movies & TV","3d":"3D art",other:"Other"};
 const $=id=>document.getElementById(id);
 const SERIES=[
   ["Honkai: Star Rail",/(?:\bhsr\b|honkai[\s_-]*star[\s_-]*rail|\b(?:kafka|acheron|firefly|march[\s_-]*7th|stelle|caelus|silver[\s_-]*wolf|ruan[\s_-]*mei|black[\s_-]*swan|sparkle|dan[\s_-]*heng)\b)/i],
@@ -60,6 +60,12 @@ async function deleteRecord(id){
     tx.onerror=()=>reject(tx.error);
   });
 }
+const FAV_KEY="waifu-wallpapers-favorites-v5";
+let favorites=new Set(),favOnly=false;
+try{favorites=new Set(JSON.parse(localStorage.getItem(FAV_KEY)||"[]"));}catch(_){}
+function saveFavorites(){try{localStorage.setItem(FAV_KEY,JSON.stringify([...favorites]));}catch(_){}}
+function toggleFavorite(id){if(favorites.has(id))favorites.delete(id);else favorites.add(id);saveFavorites();render();updateFavoriteButton();}
+function updateFavoriteButton(){if(detailItem)$('detailFavorite').textContent=favorites.has(detailItem.id)?"♥ Remove favorite":"♡ Save favorite";}
 function titleForFile(name){
   const base=String(name||'').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
   if(!base || /^(?:1000\d+|img\s*\d+|screenshot\s*\d+|dsc\s*\d+|image\s*\d+)$/i.test(base))return "Untitled wallpaper";
@@ -121,7 +127,9 @@ function derive(file,analysis){
   const series=guessSeries(source);
   const lower=source.toLowerCase();
   let category=analysis.oled?'oled':series?'anime':/\b(dragon|fantasy|magic|fairy|castle|angel|demon)\b/.test(lower)?'fantasy':/\b(cyberpunk|neon|mecha|space|robot|sci[\s_-]?fi)\b/.test(lower)?'scifi':'anime';
+  if(!analysis.oled && !series){if(/beach|ocean|forest|mountain|lake|sunset|sakura|river|landscape|sky/.test(lower))category='nature';else if(/bedroom|cozy|rainy|coffee|pastel|aesthetic/.test(lower))category='aesthetic';else if(/minimal|monochrome/.test(lower))category='minimal';else if(/abstract|pattern|geometry/.test(lower))category='abstract';}
   const tags=new Set([analysis.orientation]);
+  for(const tag of ['beach','ocean','bedroom','anime girl','rain','night','sunset','forest','city','mountain','sky','moon','sakura','flowers','cozy','purple','blue','cute','dark','space'])if(lower.includes(tag))tags.add(tag);
   if(series)tags.add(series);
   if(analysis.oled)tags.add("OLED");
   if(analysis.color!=='neutral')tags.add(analysis.color);
@@ -143,7 +151,7 @@ async function prepareBatch(files){
   const validType=new Set(['image/png','image/jpeg','image/webp']);
   const list=[...files].filter(f=>validType.has(f.type));
   if(!list.length){$('importStatus').textContent="Choose PNG, JPG or WebP files.";return;}
-  if(list.length>MAX_IMPORT){$('importStatus').textContent="Choose up to 100 images per batch. Split larger folders into smaller groups.";return;}
+  if(list.length>MAX_IMPORT){$('importStatus').textContent="Choose up to 500 images per batch. Split larger folders into smaller groups.";return;}
   if(list.some(f=>f.size>MAX_FILE||f.size<100)){$('importStatus').textContent="Each image must be between 100 bytes and 10 MB.";return;}
   preparing=true;
   $('saveDrafts').disabled=true;
@@ -183,7 +191,8 @@ function renderDrafts(){
     const input=document.createElement('input');input.value=draft.title;input.maxLength=90;input.setAttribute('aria-label','Wallpaper title for image '+(i+1));
     input.addEventListener('change',()=>{draft.title=input.value.trim().slice(0,90)||'Untitled wallpaper';});
     const sub=makeEl('small',null,(draft.series?draft.series+' · ':'')+draft.width+' × '+draft.height+' · '+toMb(draft.file.size));
-    info.append(input,sub);
+    const tags=makeEl('small','draft-tags','Suggested tags: '+(draft.tags||[]).join(', '));
+    info.append(input,sub,tags);
     const category=document.createElement('select');category.setAttribute('aria-label','Category for image '+(i+1));
     for(const [val,label] of Object.entries(LABELS)){const o=new Option(label,val);category.append(o);}
     category.value=draft.category;category.addEventListener('change',()=>{draft.category=category.value;});
@@ -226,6 +235,9 @@ function populateSeries(){
 }
 function filteredItems(){
   let result=items.filter(item=>{
+    if(favOnly&&!favorites.has(item.id))return false;
+    const tagQuery=$('tagFilter').value.trim().toLowerCase().replaceAll('#','');
+    if(tagQuery){const tokens=tagQuery.split(',').map(x=>x.trim()).filter(Boolean);const hay=(item.tags||[]).join(' ').toLowerCase()+' '+(item.description||'').toLowerCase();if(tokens.some(t=>!hay.includes(t)))return false;}
     const category=$('category').value,series=$('series').value,orient=$('orientation').value;
     if(category!=='all'&&item.category!==category)return false;
     if(series!=='all'&&item.series!==series)return false;
@@ -252,6 +264,10 @@ function makeTile(item){
   const url=URL.createObjectURL(item.thumb||item.blob);img.src=url;cardUrls.push(url);
   button.append(img,makeEl('span','tile-overlay'),makeEl('span','tile-shape',LABELS[item.category]||'Artwork'));
   button.addEventListener('click',()=>openDetail(item.id));
+  const fav=makeEl('button','tile-fav',favorites.has(item.id)?'♥':'♡');
+  fav.type='button';fav.setAttribute('aria-label',(favorites.has(item.id)?'Remove favorite: ':'Save favorite: ')+item.title);
+  fav.addEventListener('click',()=>toggleFavorite(item.id));
+  frame.append(fav);
   const selectLabel=makeEl('label','tile-checkbox');selectLabel.title='Select for batch download';
   const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected.has(item.id);checkbox.setAttribute('aria-label','Select '+item.title);
   checkbox.addEventListener('change',()=>{
@@ -259,7 +275,7 @@ function makeTile(item){
     tile.classList.toggle('selected',checkbox.checked);
     updateSelection();
   });
-  selectLabel.append(checkbox);
+  selectLabel.append(checkbox);selectLabel.hidden=true;
   frame.append(button,selectLabel);
   const details=makeEl('div','tile-text');
   const title=makeEl('strong',null,item.title);
@@ -297,7 +313,7 @@ function openDetail(id){
   if(detailUrl)URL.revokeObjectURL(detailUrl);
   detailUrl=URL.createObjectURL(detailItem.blob);
   $('detailImage').src=detailUrl;$('detailImage').alt=detailItem.title;
-  $('detailTitle').textContent=detailItem.title;
+  $('detailTitle').textContent=detailItem.title;updateFavoriteButton();
   $('detailDimensions').textContent=detailItem.width+' × '+detailItem.height;
   $('detailSize').textContent=toMb(detailItem.size);
   $('detailName').value=detailItem.title;
@@ -331,11 +347,11 @@ async function deleteDetail(){
   const item=detailItem;
   if(!confirm('Delete "'+item.title+'" from THIS browser? This cannot be undone.'))return;
   try{
-    await deleteRecord(item.id);selected.delete(item.id);quality.delete(item.id);
+    await deleteRecord(item.id);selected.delete(item.id);quality.delete(item.id);favorites.delete(item.id);saveFavorites();
     items=await allRecords();populateSeries();render();$('detailDialog').close();
   }catch(e){window.alert('Delete failed: '+e.message);}
 }
-function openBatch(){
+function openBatch(){return; // Bulk download deliberately disabled pending later redesign.
   batchOpen=true;$('overlay').hidden=false;
   $('batchPanel').classList.add('open');$('batchPanel').setAttribute('aria-hidden','false');
   renderBatch();
@@ -391,7 +407,7 @@ async function batchStart(){
     for(const control of $('batchList').querySelectorAll('select,button'))control.disabled=false;
   }
 }
-function resetFilters(){$('category').value='all';$('series').value='all';$('orientation').value='all';$('sort').value='recent';$('searchInput').value='';showLimit=70;render();}
+function resetFilters(){favOnly=false;$('favoriteFilter').classList.remove('active');$('tagFilter').value='';$('category').value='all';$('series').value='all';$('orientation').value='all';$('sort').value='recent';$('searchInput').value='';showLimit=70;render();}
 function csv(text){return '"'+String(text??'').replace(/"/g,'""')+'"';}
 function exportCSV(){
   const headers=['filename','title','description','series','category','tags','width','height','size_bytes','created_at'];
@@ -401,7 +417,7 @@ function exportCSV(){
 }
 function importOpen(){if(!$('importDialog').open)$('importDialog').showModal();}
 function bindUI(){
-  for(const id of ['railImport','headerImport','emptyImport'])$(id).addEventListener('click',importOpen);
+  for(const id of ['railImport','headerImport','emptyImport','heroImport'])$(id).addEventListener('click',importOpen);
   for(const id of ['railBatch','headerBatch','dockBatch'])$(id).addEventListener('click',openBatch);
   $('dockClear').addEventListener('click',()=>{selected.clear();updateSelection();render();});
   $('clearSelection').addEventListener('click',()=>{selected.clear();updateSelection();render();});
@@ -415,7 +431,7 @@ function bindUI(){
   $('applyQuality').addEventListener('click',()=>{for(const id of selected)quality.set(id,$('defaultQuality').value);renderBatch();});
   $('startBatch').addEventListener('click',batchStart);
   $('cancelBatch').addEventListener('click',()=>{cancelBatchWork();$('batchStatus').textContent='Stopping at next processing tile…';});
-  for(const id of ['searchInput','category','series','orientation','sort'])$(id).addEventListener(id==='searchInput'?'input':'change',()=>{showLimit=70;render();});
+  for(const id of ['searchInput','category','series','orientation','sort','tagFilter'])$(id).addEventListener(['searchInput','tagFilter'].includes(id)?'input':'change',()=>{showLimit=70;render();});
   $('clearAll').addEventListener('click',resetFilters);
   $('loadMore').addEventListener('click',()=>{showLimit+=70;render();});
   for(const button of document.querySelectorAll('[data-quick]'))button.addEventListener('click',()=>{
@@ -423,6 +439,8 @@ function bindUI(){
     document.getElementById('archiveHeading').scrollIntoView({behavior:'smooth',block:'center'});
   });
   $('exportCsv').addEventListener('click',exportCSV);
+  $('favoriteFilter').addEventListener('click',()=>{favOnly=!favOnly;$('favoriteFilter').classList.toggle('active',favOnly);render();$('archiveHeading').scrollIntoView({behavior:'smooth'});});
+  $('detailFavorite').addEventListener('click',()=>{if(detailItem)toggleFavorite(detailItem.id);});
   $('menuToggle').addEventListener('click',()=>{$('rail').classList.toggle('menu-open');$('overlay').hidden=!$('rail').classList.contains('menu-open');});
   $('importClose').addEventListener('click',()=>{if(!preparing&&!saving)$('importDialog').close();});
   $('clearDrafts').addEventListener('click',()=>{if(!preparing&&!saving)clearDrafts();});

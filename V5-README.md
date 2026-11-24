@@ -1,46 +1,48 @@
-# Waifu Wallpapers V5 — Anime Gallery + Owner Studio
+# Waifu Wallpapers — Cloudflare live preview (2026-11-24)
 
-## State
+## Deployment status
 
-- **Design preview** on Vercel; original production AI upscaler not replaced.
-- Cloudflare connection confirmed. D1 database `waifu-wallpapers-db` has been created and the V5 schema applied.
-- **R2 is NOT enabled** in the Cloudflare account as of 2026-11-24, so real public uploads and public catalog images cannot operate yet.
-- No admin password has been committed to GitHub or set in a Cloudflare Worker. Do not enable admin endpoints without a strong Cloudflare `ADMIN_TOKEN` secret (at least 32 random characters).
-- The user must enable R2 themselves using Cloudflare Dashboard -> Storage & Databases -> R2 -> Overview and complete the R2 subscription checkout, after reviewing billing.
-- This is prelaunch software. Mobile compatibility, real 15 MB uploads, moderation flow, and high-volume import need end-to-end testing.
+- Public website preview: https://waifu-wallpapers-p3xzc0lqd-myself-adc5.vercel.app/
+- Live API: https://waifu-wallpapers-api.waifu-wallpapers-vishal13.workers.dev
+- Cloudflare R2 private Standard bucket: `waifu-wallpapers-images` (Asia-Pacific); **R2 public development URL disabled; no custom public bucket domain**.
+- D1 database: `waifu-wallpapers-db`, bound to Worker.
+- Worker module: `cloudflare/src/worker.js` deployed with R2 and D1 bindings; `/api/health` and empty `/api/gallery` confirmed via Cloudflare Browser Rendering.
+- Long random `ADMIN_TOKEN` secret installed **only** in Cloudflare Workers. **Never commit or put this secret in frontend configuration**. Rotate it from Cloudflare dashboard if compromised.
+- GitHub branch: `v5-admin-gallery`. Production Vercel domain not overwritten. Direct previews still need hands-on mobile and upload tests.
 
-## Routes
+## Pages
 
-- `/` and `/library.html` — redesigned V5 anime-themed personal library. Local 500-file-at-a-time import (15 MB max per file), editable title, series, tags and description, local favorites, filters, original and individual AI enhancement.
-- `/community.html` — future guest-safe public catalog. Search by title/series/category/tags, original and AI download and browser-local favorites. No public upload.
-- `/admin.html` — owner-only management dashboard, initially locked pending R2 + admin secret; 500-file queue, upload drafts and publish/metadata controls. Authentication uses a server-side long secret in memory, not browser localStorage.
-- `/ai.html` — unchanged real ONNX waifu2x AI studio, with direct 2×/4× enhancement and single-image downloads.
-- **Mixed-quality bulk ZIP is intentionally disabled** per owner request.
+- `/` — **public** anime wallpaper gallery, 25 categories, filter/search by title/description/series/tag, responsive art thumbnails, guest-local favorites, original and AI 2×/4× download actions.
+- `/admin.html` — **private owner studio**. Login with the Worker admin key, import 500 files at a time, edit per-image metadata and send drafts securely to R2, then approve/publish.
+- `/library.html` — optional **browser-only private collection** and bulk-import prototype, maximum 500 images per batch, 15 MB/image (subject to browser quota).
+- `/ai.html` — existing working local ONNX/waifu2x 2× and 4× engine, unmodified.
+- Public bulk ZIP download is disabled by owner request.
 
-## Categories and tags
+## Categories (25)
 
-Categories: Anime, OLED/Dark, Fantasy, Sci-Fi, Nature & Scenery, Aesthetic, Minimal, Abstract, Movies & TV, 3D Art, Other.
+Anime, Manga & comics, Games, OLED/Dark, Fantasy, Sci-Fi, Cyberpunk, Space & cosmos, Nature & scenery, Cities & skylines, Aesthetic, Minimal, Abstract, Movies & TV, 3D art, Cars & vehicles, Animals, Architecture, Photography, Digital art, Horror, Cute/Kawaii, Seasonal, Sports, Other.
 
-The series field is separate (e.g. `Demon Slayer`), and tags can be as specific as `shinobu, butterfly, bedroom, ocean, anime girl, moon, night, purple`.
+Series and tags are separate: `category=anime`, `series=Demon Slayer`, `tags=shinobu,butterfly,night,purple,portrait`.
+Basic auto-suggestions use filenames/folders, **not AI image recognition**. All metadata can be manually reviewed.
 
-Filename/folder-based metadata suggestions are **heuristics**, not genuine AI image classification. Future enhancement: vision model for image-content recognition with confidence scores and admin approval.
+## Owner workflow
 
-## Cloudflare deployment steps (once R2 is enabled)
+1. Open the **Admin Studio** at the preview URL. Paste the private admin access key.
+2. Choose or drop up to 500 files (PNG/JPG/WebP; each <=15 MB). Review and update suggested title, series, description, category, tags for every image.
+3. Select **Upload drafts securely**. Each image and a compressed thumbnail go to private R2; metadata goes into D1 as `draft`.
+4. Select **Manage catalog**, choose Drafts, then **Publish** approved works individually.
+5. Only records marked `approved` appear in public `/api/gallery`; all others return 404 to guest image requests.
+6. Visitors can download originals or use the AI studio and save favorites locally. No guest account or password needed.
 
-1. Create private R2 bucket `waifu-wallpapers-images`; do **not** enable public bucket access.
-2. Use the existing D1 database ID already in `cloudflare/wrangler.jsonc`.
-3. Set `ALLOWED_ORIGINS` to exact approved Vercel domain(s), including any preview URL used during testing.
-4. Deploy `cloudflare/src/worker.js` with bindings `DB` (D1) and `IMAGES` (R2).
-5. Set a random, long `ADMIN_TOKEN` as a Cloudflare Worker secret in its secure environment, not in GitHub or JavaScript.
-6. Add the public `https://...workers.dev` endpoint (no secrets) to `community-config.js`.
-7. Verify public read endpoints, admin 401 rejection, draft upload, draft visibility restrictions, update, approve and public download, then test across laptop + phone.
-8. Do not make public launch until browser integration, abuse defenses, moderation, copyright/takedown policy, and storage/billing limits are reviewed.
+## Security and billing
 
-## Security model
+- Admin uploads and edits require Cloudflare `ADMIN_TOKEN` (>=32 characters), supplied via HTTPS, held only in browser memory by admin studio.
+- Private R2 bucket has no public R2 domain; uploads are streamed through the Worker and only approved images can be fetched publicly.
+- This is **a first-generation access-key gate**, not full role-based authentication. Before large-scale public launch, replace with Cloudflare Access or passwordless admin login with audited sessions, improve content moderation, copyrights/takedowns, rate limiting and monitoring.
+- Cloudflare R2 has free usage allowances, but **thousands of wallpaper originals can exceed them and incur monthly storage/operation charges**. Check real usage and pricing. 500×15 MB is a batch limit, not a promise about available storage.
+- Production site remains unchanged pending real browser upload, publish, search, and mobile tests.
+- Do not publish or redistribute artwork without appropriate permissions.
 
-- Public: GET approved images and metadata only.
-- Owner: admin bearer secret required for upload, metadata edit, publication/unpublication. Admin key held in page memory only and transmitted over HTTPS.
-- Every public image must be explicitly **approved**; unpublished records are not downloadable by guests.
-- Local visitor favorites stored in localStorage; clearing site data removes them. Future optional accounts can sync favorites.
-- A strong access-key gate is an initial owner-only MVP, **not a complete password + user management system**. For production, prefer Cloudflare Access or managed session-based authentication with auditing and rate limits.
-- No credentials in repository or frontend code.
+## Test limitations
+
+Cloudflare Browser Rendering returned HTTP 200 for the Worker health endpoint and empty gallery. Vercel deployment is READY. **Actual authenticated upload / publish and device-to-device browsing still need end-to-end testing.** No example wallpapers were uploaded without the owner's artwork.

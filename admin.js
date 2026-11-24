@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const CATEGORIES={anime:"Anime",oled:"OLED / Dark",fantasy:"Fantasy",scifi:"Sci-Fi",nature:"Nature & scenery",aesthetic:"Aesthetic",minimal:"Minimal",abstract:"Abstract",movies:"Movies & TV","3d":"3D art",other:"Other"};
+const CATEGORIES={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OLED / Dark","fantasy":"Fantasy","scifi":"Sci-Fi","cyberpunk":"Cyberpunk","space":"Space & cosmos","nature":"Nature & scenery","cityscapes":"Cities & skylines","aesthetic":"Aesthetic","minimal":"Minimal","abstract":"Abstract","movies":"Movies & TV","3d":"3D art","cars":"Cars & vehicles","animals":"Animals","architecture":"Architecture","photography":"Photography","digitalart":"Digital art","horror":"Horror","kawaii":"Cute / Kawaii","seasonal":"Seasonal","sports":"Sports","other":"Other"};
 const SERIES=[
 ["Demon Slayer",/demon[\s_-]*slayer|kimetsu|tanjiro|nezuko|shinobu|giyu|rengoku|mitsuri/i],
 ["Honkai: Star Rail",/honkai|star[\s_-]*rail|hsr|acheron|kafka|firefly|sparkle/i],

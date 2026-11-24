@@ -192,7 +192,14 @@ function renderDrafts(){
     input.addEventListener('change',()=>{draft.title=input.value.trim().slice(0,90)||'Untitled wallpaper';});
     const sub=makeEl('small',null,(draft.series?draft.series+' · ':'')+draft.width+' × '+draft.height+' · '+toMb(draft.file.size));
     const tags=makeEl('small','draft-tags','Suggested tags: '+(draft.tags||[]).join(', '));
-    info.append(input,sub,tags);
+    const seriesBox=makeEl('input','draft-inline-input');seriesBox.value=draft.series||'';seriesBox.placeholder='Series (e.g. Demon Slayer)';seriesBox.setAttribute('aria-label','Series for wallpaper '+(i+1));seriesBox.maxLength=100;
+    seriesBox.addEventListener('change',()=>draft.series=seriesBox.value.trim());
+    const descBox=makeEl('input','draft-inline-input');descBox.value=draft.description||'';descBox.placeholder='Short description';descBox.setAttribute('aria-label','Description for wallpaper '+(i+1));descBox.maxLength=280;
+    descBox.addEventListener('change',()=>draft.description=descBox.value.trim());
+    const tagsBox=makeEl('input','draft-inline-input');tagsBox.value=(draft.tags||[]).join(', ');tagsBox.placeholder='Tags: beach, bedroom, ocean';tagsBox.setAttribute('aria-label','Tags for wallpaper '+(i+1));tagsBox.maxLength=320;
+    tagsBox.addEventListener('change',()=>draft.tags=[...new Set(tagsBox.value.split(',').map(x=>x.trim()).filter(Boolean))].slice(0,20));
+    tags.textContent='Editable suggestions · category below';
+    info.append(input,sub,seriesBox,descBox,tagsBox,tags);
     const category=document.createElement('select');category.setAttribute('aria-label','Category for image '+(i+1));
     for(const [val,label] of Object.entries(LABELS)){const o=new Option(label,val);category.append(o);}
     category.value=draft.category;category.addEventListener('change',()=>{draft.category=category.value;});

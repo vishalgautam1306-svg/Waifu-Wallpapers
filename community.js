@@ -105,7 +105,13 @@ async function init(){
  $('publicFavorites').addEventListener('click',()=>{onlyFavorites=!onlyFavorites;render();});
  $('loadMore').addEventListener('click',()=>load());
  const reload=()=>{onlyFavorites=false;load(true);};
- $('publicCategory').addEventListener('change',reload);
+ $('publicCategory').addEventListener('change',()=>{syncGenres();reload();});
+ for(const btn of document.querySelectorAll('[data-publiccat]'))btn.addEventListener('click',()=>{
+   $('publicCategory').value=btn.dataset.publiccat;
+   syncGenres();reload();
+   document.getElementById('feed').scrollIntoView({behavior:'smooth',block:'start'});
+ });
+ function syncGenres(){const current=$('publicCategory').value;for(const btn of document.querySelectorAll('[data-publiccat]'))btn.classList.toggle('active',btn.dataset.publiccat===current);}
  let searchTimer;for(const id of ['publicSearch','publicTag'])$(id).addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reload,270);});
 
  if(!configured){info('Cloudflare storage has not been enabled yet. Public catalog setup is in progress.',true);page=null;render();return;}

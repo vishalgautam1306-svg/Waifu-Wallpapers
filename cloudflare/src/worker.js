@@ -28,12 +28,131 @@ function secureEqual(a,b){
  for(let i=0;i<Math.max(a.length,b.length);i++)n|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
  return n===0&&a.length>0;
 }
-function authorized(request,env){
- const incoming=(request.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");
- // A long random value is required. This is a secret configured in Cloudflare, never inside JS.
- return !!env.ADMIN_TOKEN && String(env.ADMIN_TOKEN).length>=32 && secureEqual(incoming,env.ADMIN_TOKEN);
+
+const SESSION_MS=30*60*1000;
+const LOGIN_WINDOW_MS=15*60*1000;
+const MAX_FAILED_LOGINS=6;
+const AI_DAILY_CAP=20; // Deliberate cap: Workers AI may incur charges on paid plans.
+const MODEL="@cf/moondream/moondream3.1-9B-A2B";
+
+function bearer(request){return (request.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");}
+async function digest(value){
+ const bytes=new TextEncoder().encode(value);
+ const hash=await crypto.subtle.digest("SHA-256",bytes);
+ return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
-function ensureAdmin(request,env){return authorized(request,env)?null:fail(request,env,401,"Admin authentication required");}
+async function fingerprints(request,env){
+ const ip=request.headers.get("CF-Connecting-IP")||"unknown";
+ const ua=request.headers.get("User-Agent")||"";
+ const salt=String(env.ADMIN_TOKEN||"");
+ return {ip:await digest("ip:"+salt+":"+ip),ua:await digest("ua:"+salt+":"+ua)};
+}
+async function audit(env,event,ip,record=""){
+ try{await env.DB.prepare("INSERT INTO admin_security_events(event,ip_hash,created_at,record_id) VALUES (?,?,?,?)").bind(event,ip,Date.now(),record).run()}
+ catch(e){console.warn("Admin audit write failed",event);}
+}
+async function ensureAdmin(request,env){
+ const raw=bearer(request);
+ if(!raw||raw.length<32||raw.length>180)return fail(request,env,401,"Admin session required");
+ const now=Date.now();
+ const hash=await digest(raw);
+ const row=await env.DB.prepare("SELECT ip_hash,ua_hash,expires_at FROM admin_sessions WHERE token_hash=?").bind(hash).first();
+ if(!row||row.expires_at<=now)return fail(request,env,401,"Session expired. Sign in again.");
+ const fp=await fingerprints(request,env);
+ if(!secureEqual(row.ip_hash,fp.ip)||!secureEqual(row.ua_hash,fp.ua))return fail(request,env,401,"Admin session device verification failed");
+ return null;
+}
+async function loginAdmin(request,env){
+ if(!env.ADMIN_TOKEN||String(env.ADMIN_TOKEN).length<32)return fail(request,env,503,"Owner authentication is not configured");
+ if(!(request.headers.get("Content-Type")||"").startsWith("application/json"))return fail(request,env,415,"JSON request required");
+ const len=Number(request.headers.get("Content-Length")||0);
+ if(len>1500)return fail(request,env,413,"Invalid login request");
+ const fp=await fingerprints(request,env), now=Date.now();
+ const prior=await env.DB.prepare("SELECT window_start,failures,locked_until FROM admin_login_attempts WHERE ip_hash=?").bind(fp.ip).first();
+ if(prior?.locked_until>now)return fail(request,env,429,"Too many attempts. Retry in 15 minutes.");
+ const body=await request.json().catch(()=>null);
+ const key=typeof body?.key==="string"&&body.key.length<=256?body.key:"";
+ if(!secureEqual(key,String(env.ADMIN_TOKEN))){
+  const recent=prior&&now-prior.window_start<LOGIN_WINDOW_MS;
+  const count=(recent?prior.failures:0)+1;
+  const locked=count>=MAX_FAILED_LOGINS?now+LOGIN_WINDOW_MS:0;
+  await env.DB.prepare("INSERT INTO admin_login_attempts(ip_hash,window_start,failures,locked_until) VALUES (?,?,?,?) ON CONFLICT(ip_hash) DO UPDATE SET window_start=excluded.window_start,failures=excluded.failures,locked_until=excluded.locked_until").bind(fp.ip,recent?prior.window_start:now,count,locked).run();
+  await audit(env,"login_failed",fp.ip);
+  return fail(request,env,locked?429:401,locked?"Too many attempts. Retry in 15 minutes.":"Invalid admin key");
+ }
+ await env.DB.prepare("DELETE FROM admin_login_attempts WHERE ip_hash=?").bind(fp.ip).run();
+ const keyBytes=crypto.getRandomValues(new Uint8Array(32));
+ const session=btoa(String.fromCharCode(...keyBytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const tokenHash=await digest(session),expiry=now+SESSION_MS;
+ await env.DB.prepare("INSERT INTO admin_sessions(token_hash,ip_hash,ua_hash,created_at,expires_at) VALUES (?,?,?,?,?)").bind(tokenHash,fp.ip,fp.ua,now,expiry).run();
+ await audit(env,"login_success",fp.ip);
+ return reply(request,env,{authenticated:true,session,expiresAt:expiry,ttlMinutes:30});
+}
+async function logoutAdmin(request,env){
+ await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash=?").bind(await digest(bearer(request))).run();
+ return reply(request,env,{loggedOut:true});
+}
+function imageDataUri(bytes,mime){
+ // 12 KiB is divisible by 3 so independently encoded base64 chunks join safely.
+ let b64="";
+ for(let i=0;i<bytes.length;i+=12288)b64+=btoa(String.fromCharCode(...bytes.subarray(i,i+12288)));
+ return "data:"+mime+";base64,"+b64;
+}
+function aiMetadata(textOutput,originalName=""){
+ const textValue=typeof textOutput==="string"?textOutput:String(textOutput?.answer||textOutput?.caption||"");
+ const jsonText=textValue.match(/\{[\s\S]*\}/)?.[0]||"";
+ let parsed={};
+ try{parsed=JSON.parse(jsonText);}catch(_){}
+ const description=text(parsed.description||(!jsonText?textValue:""),450);
+ const title=text(parsed.title||"",90);
+ const series=text(parsed.series||"",100);
+ const category=CAT.has(parsed.category)?parsed.category:"anime";
+ const suggestedTags=tags(parsed.tags||[]);
+ if(!suggestedTags.length){
+   for(const term of ["beach","ocean","bedroom","night","moon","sky","forest","flowers","purple","blue","neon","city","anime","illustration","portrait","landscape","mountains","clouds","stars","room","sakura","sunset"]){
+     if(description.toLowerCase().includes(term))suggestedTags.push(term);
+   }
+ }
+ return {title,description,series,category,tags:suggestedTags,provider:"Cloudflare Workers AI · Moondream 3.1",needsReview:true};
+}
+async function analyzeImage(request,env){
+ if(!env.AI)return fail(request,env,503,"Visual AI is not enabled yet");
+ let bytes,mime;
+ const kind=request.headers.get("Content-Type")||"";
+ if(kind.startsWith("multipart/form-data")){
+   if(Number(request.headers.get("Content-Length")||0)>MAX_THUMB+30000)return fail(request,env,413,"Use a small preview image for AI");
+   const form=await request.formData();
+   const preview=form.get("thumbnail");
+   if(!(preview instanceof File)||preview.size<50||preview.size>MAX_THUMB)return fail(request,env,400,"Preview image must be under 500 KB");
+   bytes=new Uint8Array(await preview.arrayBuffer());
+ }else if(kind.startsWith("application/json")){
+   const body=await request.json().catch(()=>null);
+   const id=body?.id;
+   if(typeof id!=="string"||!idOK(id))return fail(request,env,400,"Valid wallpaper ID required");
+   const item=await env.DB.prepare("SELECT thumb_key FROM wallpapers WHERE id=?").bind(id).first();
+   if(!item)return fail(request,env,404,"Wallpaper not found");
+   const image=await env.IMAGES.get(item.thumb_key);
+   if(!image||image.size>MAX_THUMB)return fail(request,env,400,"Preview unavailable");
+   bytes=new Uint8Array(await image.arrayBuffer());
+ }else return fail(request,env,415,"Send preview file or wallpaper ID");
+ mime=sniffMime(bytes);
+ if(!mime)return fail(request,env,415,"Only valid PNG/JPEG/WebP previews are supported");
+ const day=new Date().toISOString().slice(0,10);
+ const quota=await env.DB.prepare("INSERT INTO admin_ai_usage(day,calls) VALUES (?,1) ON CONFLICT(day) DO UPDATE SET calls=calls+1 WHERE calls<?").bind(day,AI_DAILY_CAP).run();
+ if((quota.meta?.changes||0)===0)return fail(request,env,429,"AI scan limit reached: 20 per day. Check Cloudflare AI usage before scanning more.");
+ const fp=await fingerprints(request,env);
+ await audit(env,"ai_scan",fp.ip);
+ try{
+  const question='Examine this wallpaper image and return ONLY a JSON object with keys: "title" (short descriptive title), "description" (one descriptive sentence about VISIBLE subjects and setting), "series" (anime/game title ONLY if confidently recognizable, otherwise empty string), "category" (ONE of anime,manga,gaming,oled,fantasy,scifi,cyberpunk,space,nature,cityscapes,aesthetic,minimal,abstract,movies,3d,cars,animals,architecture,photography,digitalart,horror,kawaii,seasonal,sports,other), and "tags" (array of up to 12 visual tags like anime girl, ocean, beach, bedroom, moon, neon, purple, portrait). Never invent specific named characters or series. This is an image indexing draft, not an assertion of copyright or identity.';
+  const response=await env.AI.run(MODEL,{task:"query",image:imageDataUri(bytes,mime),question,reasoning:false,stream:false,max_tokens:320,temperature:0.15});
+  const metadata=aiMetadata(response);
+  if(!metadata.description&&!metadata.tags.length)return fail(request,env,502,"The vision model returned an unusable suggestion. You can retry later.");
+  return reply(request,env,{suggestions:metadata,remainingToday:Math.max(0,AI_DAILY_CAP-((await env.DB.prepare("SELECT calls FROM admin_ai_usage WHERE day=?").bind(day).first())?.calls||0))});
+ }catch(e){
+   console.error("Visual AI unavailable",e?.message||"model failure");
+   return fail(request,env,502,"Cloudflare AI did not complete this scan. No metadata was changed.");
+ }
+}
 function text(value,n=120){return String(value??"").replace(/[<>\u0000-\u001f\u007f]/g,"").trim().slice(0,n);}
 function tags(value){
  const arr=Array.isArray(value)?value:String(value||"").split(",");
@@ -171,6 +290,7 @@ async function upload(request,env){
   await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
   throw error;
  }
+ await audit(env,"upload", (await fingerprints(request,env)).ip, id);
  return reply(request,env,{id,status:"draft",message:"Added to private admin drafts"},201);
 }
 async function edit(request,env,id){
@@ -184,6 +304,7 @@ async function edit(request,env,id){
  const tagList=body.tags===undefined?JSON.parse(row.tags_json||"[]"):tags(body.tags);
  await env.DB.prepare("UPDATE wallpapers SET title=?,description=?,series=?,category=?,tags_json=?,updated_at=? WHERE id=?")
   .bind(title,desc,series,category,JSON.stringify(tagList),Date.now(),id).run();
+ await audit(env,"metadata_edit", (await fingerprints(request,env)).ip, id);
  return reply(request,env,{id,message:"Updated"});
 }
 async function change(request,env,id){
@@ -192,6 +313,7 @@ async function change(request,env,id){
  const body=await request.json().catch(()=>null);
  if(!["draft","approved","removed"].includes(body?.status))return fail(request,env,400,"Invalid status");
  await env.DB.prepare("UPDATE wallpapers SET status=?,updated_at=? WHERE id=?").bind(body.status,Date.now(),id).run();
+ await audit(env,"visibility_"+body.status,(await fingerprints(request,env)).ip,id);
  return reply(request,env,{id,status:body.status});
 }
 export default {
@@ -202,15 +324,18 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:5});
-   if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:7});
+   if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
    const pic=/^\/api\/wallpapers\/([\da-f-]{36})\/(original|thumb)$/.exec(path);
    if(pic&&["GET","HEAD"].includes(request.method))return getImage(request,env,pic[1],pic[2]);
    if(path.startsWith("/api/admin/")){
-    const denied=ensureAdmin(request,env);
+    if(path==="/api/admin/login"&&request.method==="POST")return loginAdmin(request,env);
+    const denied=await ensureAdmin(request,env);
     if(denied)return denied;
-    if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true});
+    if(path==="/api/admin/logout"&&request.method==="POST")return logoutAdmin(request,env);
+    if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true,expiresInMinutes:30});
+    if(path==="/api/admin/analyze"&&request.method==="POST")return analyzeImage(request,env);
     const adminPic=/^\/api\/admin\/wallpapers\/([\da-f-]{36})\/(thumb|original)$/.exec(path);
     if(adminPic&&["GET","HEAD"].includes(request.method))return getImage(request,env,adminPic[1],adminPic[2],true);
     if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);

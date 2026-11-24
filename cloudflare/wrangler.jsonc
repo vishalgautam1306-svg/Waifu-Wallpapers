@@ -9,7 +9,10 @@
     "ALLOWED_ORIGINS": "https://waifu-wallpapers.vercel.app"
   },
   "r2_buckets": [
-    {"binding": "IMAGES", "bucket_name": "waifu-wallpapers-images"}
+    {
+      "binding": "IMAGES",
+      "bucket_name": "waifu-wallpapers-images"
+    }
   ],
   "d1_databases": [
     {
@@ -18,5 +21,8 @@
       "database_id": "a964aaa1-a150-4579-a833-b7c81c805120",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }

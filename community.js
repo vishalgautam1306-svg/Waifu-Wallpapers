@@ -19,9 +19,11 @@ function empty(title,desc){$('publicEmpty').hidden=false;$('emptyTitle').textCon
 function src(id,kind='thumb'){return api+'/api/wallpapers/'+encodeURIComponent(id)+'/'+kind;}
 function buildCard(item){
  const card=document.createElement('button');card.type='button';card.className='wallcard';
+ if(item.width && item.height) card.classList.add(item.height>item.width*1.12?'portrait-art':item.width>item.height*1.12?'landscape-art':'square-art');
  card.setAttribute('aria-label','Preview '+item.title);
  const box=document.createElement('div');box.className='image-wrap';
  const img=document.createElement('img');img.loading='lazy';img.decoding='async';img.alt=item.title;img.src=src(item.id);
+ if(item.width>0&&item.height>0)img.style.aspectRatio=item.width+' / '+item.height;
  const overlay=document.createElement('span');overlay.className='img-overlay';
  const chip=document.createElement('span');chip.className='chip';chip.textContent=CATS[item.category]||'Artwork';
  const arrow=document.createElement('span');arrow.className='view';arrow.textContent='↗';
@@ -63,15 +65,36 @@ async function load(reset=false){
 }
 function openDetail(item){
  selected=item;
+ const dialog=$('publicDetail');
  $('publicTitle').textContent=item.title;
- $('publicDetailCategory').textContent=(CATS[item.category]||'Artwork').toUpperCase()+(item.series?' · '+item.series:'');
- $('publicRes').textContent=item.width+' × '+item.height;
- $('publicSize').textContent=bytes(item.size);
- $('publicImage').src=src(item.id);
- $('publicImage').alt=item.title;
- $('downloadStatus').textContent=(item.description?item.description+' · ':'')+(item.tags?.length?'Tags: '+item.tags.join(', '):'Enhance locally with AI.');
+ $('publicDetailCategory').textContent=[CATS[item.category]||'Artwork',item.series].filter(Boolean).join('  ·  ');
+ const width=Number(item.width)||0, height=Number(item.height)||0;
+ const res=width&&height?width+' × '+height:'Unknown';
+ $('publicRes').textContent=res;
+ $('publicArtResolution').textContent=res;
+ $('publicSize').textContent=bytes(item.size||0);
+ $('publicOrientation').textContent=!width||!height?'Unknown':width>height*1.12?'Landscape':height>width*1.12?'Portrait':'Square';
+ $('publicFormat').textContent=({ 'image/jpeg':'JPEG','image/png':'PNG','image/webp':'WebP' })[item.mime]||'Image';
+ $('publicDescription').textContent=item.description||'';
+ const originalUrl=src(item.id,'original'),thumbUrl=src(item.id,'thumb');
+ const image=$('publicImage');
+ image.onerror=()=>{image.onerror=null;image.src=thumbUrl};
+ image.src=originalUrl;
+ image.alt=item.title+' — full wallpaper preview';
+ $('viewerAmbient').style.setProperty('--viewer-bg','url("'+thumbUrl+'")');
+ $('publicExpand').href=originalUrl;
+ const tags=$('publicTags');tags.replaceChildren();
+ const tagList=Array.isArray(item.tags)?item.tags:[];
+ for(const tag of tagList.slice(0,20)){
+   if(typeof tag!=='string'||!tag.trim())continue;
+   const chip=document.createElement('span');
+   chip.textContent='#'+tag.replace(/^#/,'').trim();
+   tags.append(chip);
+ }
+ $('viewerTagsSection').hidden=tags.childElementCount===0;
+ $('downloadStatus').textContent='AI enhancement runs locally in your browser. Original downloads retain full image quality.';
  updateFavoriteButton();
- $('publicDetail').showModal();
+ dialog.showModal();
 }
 async function original(){
  if(!selected)throw new Error('No wallpaper selected');
@@ -103,6 +126,7 @@ async function init(){
  $('public4x').addEventListener('click',()=>perform('4'));
  $('publicFavorite').addEventListener('click',()=>{if(selected)favorite(selected);});
  $('publicClose').addEventListener('click',()=>$('publicDetail').close());
+ $('publicDetail').addEventListener('click',e=>{if(e.target===$('publicDetail'))$('publicDetail').close();});
  $('publicFavorites').addEventListener('click',()=>{if(favoritesPage){location.assign('./index.html');return;}onlyFavorites=!onlyFavorites;render();});
  $('loadMore').addEventListener('click',()=>load());
  const reload=()=>{onlyFavorites=favoritesPage;load(true);};

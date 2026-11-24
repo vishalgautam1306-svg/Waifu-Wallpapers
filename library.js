@@ -1,7 +1,7 @@
 import { makeBatchZip, cancelBatchWork, capabilities } from "./library-batch.js";
 const DB_NAME="waifu-wallpapers-preview", STORE="wallpapers";
 const MAX_IMPORT=500, MAX_FILE=15*1024*1024;
-const LABELS={anime:"Anime",oled:"OLED / Dark",fantasy:"Fantasy",scifi:"Sci-Fi",nature:"Nature & scenery",aesthetic:"Aesthetic",minimal:"Minimal",abstract:"Abstract",movies:"Movies & TV","3d":"3D art",other:"Other"};
+const LABELS={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OLED / Dark","fantasy":"Fantasy","scifi":"Sci-Fi","cyberpunk":"Cyberpunk","space":"Space & cosmos","nature":"Nature & scenery","cityscapes":"Cities & skylines","aesthetic":"Aesthetic","minimal":"Minimal","abstract":"Abstract","movies":"Movies & TV","3d":"3D art","cars":"Cars & vehicles","animals":"Animals","architecture":"Architecture","photography":"Photography","digitalart":"Digital art","horror":"Horror","kawaii":"Cute / Kawaii","seasonal":"Seasonal","sports":"Sports","other":"Other"};
 const $=id=>document.getElementById(id);
 const SERIES=[
   ["Honkai: Star Rail",/(?:\bhsr\b|honkai[\s_-]*star[\s_-]*rail|\b(?:kafka|acheron|firefly|march[\s_-]*7th|stelle|caelus|silver[\s_-]*wolf|ruan[\s_-]*mei|black[\s_-]*swan|sparkle|dan[\s_-]*heng)\b)/i],
@@ -127,7 +127,7 @@ function derive(file,analysis){
   const series=guessSeries(source);
   const lower=source.toLowerCase();
   let category=analysis.oled?'oled':series?'anime':/\b(dragon|fantasy|magic|fairy|castle|angel|demon)\b/.test(lower)?'fantasy':/\b(cyberpunk|neon|mecha|space|robot|sci[\s_-]?fi)\b/.test(lower)?'scifi':'anime';
-  if(!analysis.oled && !series){if(/beach|ocean|forest|mountain|lake|sunset|sakura|river|landscape|sky/.test(lower))category='nature';else if(/bedroom|cozy|rainy|coffee|pastel|aesthetic/.test(lower))category='aesthetic';else if(/minimal|monochrome/.test(lower))category='minimal';else if(/abstract|pattern|geometry/.test(lower))category='abstract';}
+  if(!analysis.oled && !series){if(/cyberpunk|neon city/.test(lower))category='cyberpunk';else if(/horror|ghost|haunted|scary/.test(lower))category='horror';else if(/anime cute|kawaii|chibi/.test(lower))category='kawaii';else if(/manga|comic|manhwa/.test(lower))category='manga';else if(/gaming|gameplay|game wallpaper/.test(lower))category='gaming';else if(/planet|galaxy|cosmos|nebula|space/.test(lower))category='space';else if(/car|vehicle|bmw|ferrari|porsche|lamborghini/.test(lower))category='cars';else if(/cat|dog|fox|animal|bird/.test(lower))category='animals';else if(/building|architecture|interior/.test(lower))category='architecture';else if(/city|skyline|urban/.test(lower))category='cityscapes';else if(/photo|photography|portrait photo/.test(lower))category='photography';else if(/3d art|3d render|cgi/.test(lower))category='3d';else if(/digital art|concept art|illustration/.test(lower))category='digitalart';else if(/beach|ocean|forest|mountain|lake|sunset|sakura|river|landscape|sky/.test(lower))category='nature';else if(/bedroom|cozy|rainy|coffee|pastel|aesthetic/.test(lower))category='aesthetic';else if(/minimal|monochrome/.test(lower))category='minimal';else if(/abstract|pattern|geometry/.test(lower))category='abstract';}
   const tags=new Set([analysis.orientation]);
   for(const tag of ['beach','ocean','bedroom','anime girl','rain','night','sunset','forest','city','mountain','sky','moon','sakura','flowers','cozy','purple','blue','cute','dark','space'])if(lower.includes(tag))tags.add(tag);
   if(series)tags.add(series);

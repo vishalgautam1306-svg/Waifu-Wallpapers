@@ -347,7 +347,7 @@ function saveFile(blob,name){
 function detailAction(kind){
   if(!detailItem)return;
   if(kind==='original')return saveFile(detailItem.blob,detailItem.filename||'wallpaper.png');
-  window.location.href='./index.html?fromGallery='+encodeURIComponent(detailItem.id)+'&scale='+kind;
+  window.location.href='./ai.html?fromGallery='+encodeURIComponent(detailItem.id)+'&scale='+kind;
 }
 async function deleteDetail(){
   if(!detailItem)return;

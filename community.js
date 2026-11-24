@@ -63,7 +63,7 @@ async function load(reset=false){
 function openDetail(item){
  selected=item;
  $('publicTitle').textContent=item.title;
- $('publicCategory').textContent=(CATS[item.category]||'Artwork').toUpperCase()+(item.series?' · '+item.series:'');
+ $('publicDetailCategory').textContent=(CATS[item.category]||'Artwork').toUpperCase()+(item.series?' · '+item.series:'');
  $('publicRes').textContent=item.width+' × '+item.height;
  $('publicSize').textContent=bytes(item.size);
  $('publicImage').src=src(item.id);
@@ -107,7 +107,7 @@ async function init(){
  const reload=()=>{onlyFavorites=false;load(true);};
  $('publicCategory').addEventListener('change',reload);
  let searchTimer;for(const id of ['publicSearch','publicTag'])$(id).addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reload,270);});
- $('emptyUpload')?.setAttribute('hidden','');
+
  if(!configured){info('Cloudflare storage has not been enabled yet. Public catalog setup is in progress.',true);page=null;render();return;}
  try{const url=new URL(configured);if(url.protocol!=='https:')throw new Error('HTTPS required');api=url.origin+url.pathname;await load(true);}
  catch(e){info('Could not connect to storage: '+e.message,true);render();}

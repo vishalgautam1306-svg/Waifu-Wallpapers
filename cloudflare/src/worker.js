@@ -9,7 +9,8 @@ const allowedOrigins = env => (env.ALLOWED_ORIGINS || "").split(",").map(x=>x.tr
 const cors = (request,env) => {
  const h = new Headers({"Vary":"Origin","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"});
  const origin=request.headers.get("Origin");
- if(origin && allowedOrigins(env).includes(origin)){
+ const projectPreview=/^https:\/\/waifu-wallpapers-[a-z0-9]+-myself-adc5\.vercel\.app$/.test(origin||"");
+ if(origin && (allowedOrigins(env).includes(origin)||projectPreview)){
    h.set("Access-Control-Allow-Origin",origin);
    h.set("Access-Control-Allow-Methods","GET,HEAD,POST,PATCH,DELETE,OPTIONS");
    h.set("Access-Control-Allow-Headers","Authorization,Content-Type");

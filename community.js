@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const CATS={anime:'Anime',oled:'OLED / Dark',fantasy:'Fantasy',scifi:'Sci-Fi',nature:'Nature & scenery',aesthetic:'Aesthetic',minimal:'Minimal',abstract:'Abstract',movies:'Movies & TV','3d':'3D art',other:'Other'};
+const CATS={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OLED / Dark","fantasy":"Fantasy","scifi":"Sci-Fi","cyberpunk":"Cyberpunk","space":"Space & cosmos","nature":"Nature & scenery","cityscapes":"Cities & skylines","aesthetic":"Aesthetic","minimal":"Minimal","abstract":"Abstract","movies":"Movies & TV","3d":"3D art","cars":"Cars & vehicles","animals":"Animals","architecture":"Architecture","photography":"Photography","digitalart":"Digital art","horror":"Horror","kawaii":"Cute / Kawaii","seasonal":"Seasonal","sports":"Sports","other":"Other"};
 const FAV_KEY='waifu-wallpapers-public-favorites';
 let api='',items=[],page=null,busy=false,selected=null,onlyFavorites=false,favorites={};
 try{favorites=JSON.parse(localStorage.getItem(FAV_KEY)||'{}')||{};}catch(_){favorites={};}

@@ -191,3 +191,6 @@ body:has(dialog.wallpaper-viewer[open]) { overflow:hidden; }
  footer { flex-wrap:wrap; }
 }
 @media (prefers-reduced-motion:reduce) { .wallcard img,.button,.viewer-download-primary,.genre { transition:none!important; } }
+
+/* Owner navigation stays explicit even on narrow phones. */
+@media(max-width:560px){.site-header .brand>span:last-child{display:none}.site-header .owner-link span{display:inline}.site-header .owner-link{font-size:10px;padding:6px 8px}.site-header .header-cta .button{font-size:10px;padding:7px 8px}.site-header .brand{font-size:12px}}

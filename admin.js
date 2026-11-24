@@ -13,6 +13,7 @@ const SERIES=[
 ["One Piece",/one[\s_-]*piece|luffy|zoro|nami/i]
 ];
 let api='',credential='',queue=[],visible=[],adminItems=[],uploading=false,cancel=false,editing=null;
+let sessionExpiry=0,scanning=false;
 const urls=[];
 function blobUrl(blob){const url=URL.createObjectURL(blob);urls.push(url);return url;}
 function clearUrls(){for(const url of urls)URL.revokeObjectURL(url);urls.length=0;}
@@ -28,10 +29,12 @@ function proposed(file){
  return {title:name.slice(0,90)||"Untitled wallpaper",series,category,description:(name||"Wallpaper")+(series?" · "+series:""),tags};
 }
 function request(path,opts={}){
+ if(!credential||Date.now()>=sessionExpiry){if(credential)logout();return Promise.reject(new Error('Admin session expired. Please sign in again.'));}
  return fetch(api+path,{...opts,headers:{...(opts.headers||{}),Authorization:'Bearer '+credential}});
 }
 async function jsonOrThrow(response){
  let body={};try{body=await response.json();}catch(_){}
+ if(response.status===401&&credential){logout();throw new Error('Admin session expired or revoked. Sign in again.');}
  if(!response.ok)throw new Error(body.error||"Request failed: "+response.status);
  return body;
 }
@@ -42,9 +45,11 @@ function setPanel(name){
 }
 function showOffline(message){$('offline').hidden=false;$('offline').textContent=message;}
 function logout(){
- credential='';editing=null;clearUrls();queue=[];
+ const previous=credential;
+ credential='';sessionExpiry=0;editing=null;scanning=false;
  $('login').hidden=false;$('workspace').hidden=true;$('secret').value='';
- $('loginState').textContent='Locked.';
+ $('loginState').textContent='Locked. Sign in again when needed.';
+ if(previous&&api)fetch(api+'/api/admin/logout',{method:'POST',headers:{Authorization:'Bearer '+previous}}).catch(()=>{});
 }
 async function login(ev){
  ev.preventDefault();
@@ -53,13 +58,15 @@ async function login(ev){
  try{
   const url=new URL(configured);
   if(url.protocol!=='https:')throw new Error('HTTPS is required');
-  api=url.origin+url.pathname.replace(/\/+$/,'');credential=$('secret').value;
-  const result=await jsonOrThrow(await request('/api/admin/check'));
-  if(!result.authenticated)throw new Error('Admin access denied');
+  api=url.origin+url.pathname.replace(/\/+$/,'');
+  const key=$('secret').value;
+  const result=await jsonOrThrow(await fetch(api+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})}));
+  if(!result.authenticated||!result.session)throw new Error('Admin access denied');
+  credential=result.session;sessionExpiry=result.expiresAt;
   $('login').hidden=true;$('workspace').hidden=false;
   $('secret').value='';$('loginState').textContent='';
   setPanel('upload');
- }catch(e){credential='';$('loginState').textContent=e.message;}
+ }catch(e){credential='';sessionExpiry=0;$('loginState').textContent=e.message;}
 }
 function node(tag,cls,label){
  const n=document.createElement(tag);if(cls)n.className=cls;if(label!==undefined)n.textContent=label;return n;
@@ -85,7 +92,8 @@ function renderQueue(){
   sel.value=item.category;sel.addEventListener('change',()=>{item.category=sel.value;});
   card.append(img,fields,sel);list.append(card);
  }
- $('startUpload').disabled=!queue.length||uploading;
+ $('startUpload').disabled=!queue.length||uploading||scanning;
+ $('analyzeQueue').disabled=!queue.some(x=>!x.aiScanned)||uploading||scanning;
 }
 async function selectFiles(files){
  if(uploading)return;
@@ -124,9 +132,63 @@ function thumb(file){
   }catch(e){reject(e);}finally{bitmap?.close();}
  });
 }
+function applyVision(item,suggestions){
+ const x=suggestions||{};
+ if(x.title&&typeof x.title==="string")item.title=x.title.trim().slice(0,90);
+ if(x.description&&typeof x.description==="string")item.description=x.description.trim().slice(0,450);
+ if(x.series&&typeof x.series==="string")item.series=x.series.trim().slice(0,100);
+ if(x.category&&Object.hasOwn(CATEGORIES,x.category))item.category=x.category;
+ const oldTags=String(item.tags||"").split(",").map(t=>t.trim()).filter(Boolean);
+ const newTags=Array.isArray(x.tags)?x.tags.filter(t=>typeof t==="string").map(t=>t.trim()).filter(Boolean):[];
+ item.tags=[...new Set([...oldTags,...newTags].map(t=>t.toLowerCase()))].slice(0,25).join(", ");
+ item.aiScanned=true;
+}
+async function analyzeQueue(){
+ if(scanning||uploading||!credential)return;
+ const pending=queue.filter(item=>!item.aiScanned).slice(0,10);
+ if(!pending.length){$('aiQueueStatus').textContent="All queued images have already been scanned.";return;}
+ if(!confirm("Run Cloudflare image AI on "+pending.length+" thumbnails? This uses Workers AI quota and may incur charges on a paid Cloudflare plan. Every suggestion remains editable and private."))return;
+ scanning=true;$('analyzeQueue').disabled=true;$('startUpload').disabled=true;
+ let ok=0,fail=0;
+ try{
+  for(let i=0;i<pending.length;i++){
+   const item=pending[i];
+   $('aiQueueStatus').textContent="Analyzing image "+(i+1)+" of "+pending.length+" · "+item.file.name;
+   try{
+    const picture=await thumb(item.file);
+    if(picture.size>500*1024)throw new Error("Preview exceeds 500 KB");
+    const form=new FormData();form.append("thumbnail",picture);
+    const data=await jsonOrThrow(await request('/api/admin/analyze',{method:'POST',body:form}));
+    applyVision(item,data.suggestions);
+    ok++;
+   }catch(e){fail++;$('aiQueueStatus').textContent="AI stopped: "+e.message+". "+ok+" suggestions completed.";break;}
+  }
+  renderQueue();
+  if(!fail)$('aiQueueStatus').textContent=ok+" images analyzed. Review all titles, series and tags before uploading or publishing.";
+ }finally{scanning=false;renderQueue();}
+}
+async function suggestForEdit(){
+ if(!editing||scanning||!credential)return;
+ if(!confirm("Analyze this stored thumbnail with Cloudflare image AI? This uses AI quota. Changes will only be applied if you later click Save metadata."))return;
+ scanning=true;$('editAI').disabled=true;$('editStatus').textContent="Analyzing the actual wallpaper pixels…";
+ try{
+  const data=await jsonOrThrow(await request('/api/admin/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:editing.id})}));
+  const suggestions=data.suggestions||{};
+  if(suggestions.title)$('editTitle').value=suggestions.title;
+  if(suggestions.series)$('editSeries').value=suggestions.series;
+  if(suggestions.description)$('editDescription').value=suggestions.description;
+  if(suggestions.category&&Object.hasOwn(CATEGORIES,suggestions.category))$('editCategory').value=suggestions.category;
+  if(Array.isArray(suggestions.tags)){
+   const current=$('editTags').value.split(",").map(t=>t.trim()).filter(Boolean);
+   $('editTags').value=[...new Set([...current,...suggestions.tags])].slice(0,25).join(", ");
+  }
+  $('editStatus').textContent="AI draft ready. Check possible mistakes, then click Save metadata to apply changes.";
+ }catch(e){$('editStatus').textContent="AI scan unavailable: "+e.message;}
+ finally{scanning=false;$('editAI').disabled=false;}
+}
 async function uploadQueue(){
  if(uploading||!queue.length)return;
- uploading=true;cancel=false;$('startUpload').disabled=true;$('cancelUpload').disabled=false;
+ uploading=true;cancel=false;$('startUpload').disabled=true;$('analyzeQueue').disabled=true;$('cancelUpload').disabled=false;
  const count=queue.length;let success=0;const failures=[];
  try{
   for(let i=0;i<count;i++){
@@ -149,7 +211,7 @@ async function uploadQueue(){
    queue=queue.slice(completed);renderQueue();
   }
   $('uploadStatus').textContent=success+' drafts uploaded'+(failures.length?' · '+failures.length+' failed: '+failures.slice(0,3).join(' | '):'')+(cancel?' · Stopped early':'')+'. Drafts stay private until published.';
- }finally{uploading=false;$('startUpload').disabled=!queue.length;$('cancelUpload').disabled=true;}
+ }finally{uploading=false;$('startUpload').disabled=!queue.length;$('cancelUpload').disabled=true;renderQueue();}
 }
 async function preview(id,img){
  try{
@@ -213,6 +275,8 @@ function bind(){
  $('folder').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});
  $('clearQueue').addEventListener('click',()=>{if(uploading)return;clearUrls();queue=[];renderQueue();});
  $('startUpload').addEventListener('click',uploadQueue);
+ $('analyzeQueue').addEventListener('click',analyzeQueue);
+ $('editAI').addEventListener('click',suggestForEdit);
  $('cancelUpload').addEventListener('click',()=>{cancel=true;$('uploadStatus').textContent='Stopping after current upload…';});
  $('editForm').addEventListener('submit',saveEdit);
  $('closeEdit').addEventListener('click',()=>$('editDialog').close());
@@ -221,7 +285,7 @@ function bind(){
  ['drop','dragleave'].forEach(event=>box.addEventListener(event,e=>{e.preventDefault();box.classList.remove('drag');}));
  box.addEventListener('drop',e=>selectFiles(e.dataTransfer.files));
  for(const [key,val] of Object.entries(CATEGORIES))$('editCategory').append(new Option(val,key));
- window.addEventListener('pagehide',()=>{credential='';clearUrls();});
+ window.addEventListener('pagehide',()=>{credential='';sessionExpiry=0;clearUrls();});
 }
 document.addEventListener('DOMContentLoaded',()=>{
  bind();

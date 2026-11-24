@@ -388,7 +388,7 @@ async function batchStart(){
     $('batchDetail').textContent=String(e.message||e);
   }finally{
     processing=false;$('cancelBatch').disabled=true;$('startBatch').disabled=!selected.size;
-    renderBatch();
+    for(const control of $('batchList').querySelectorAll('select,button'))control.disabled=false;
   }
 }
 function resetFilters(){$('category').value='all';$('series').value='all';$('orientation').value='all';$('sort').value='recent';$('searchInput').value='';showLimit=70;render();}

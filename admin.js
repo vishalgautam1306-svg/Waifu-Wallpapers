@@ -53,7 +53,7 @@ async function login(ev){
  try{
   const url=new URL(configured);
   if(url.protocol!=='https:')throw new Error('HTTPS is required');
-  api=url.origin+url.pathname;credential=$('secret').value;
+  api=url.origin+url.pathname.replace(/\/+$/,'');credential=$('secret').value;
   const result=await jsonOrThrow(await request('/api/admin/check'));
   if(!result.authenticated)throw new Error('Admin access denied');
   $('login').hidden=true;$('workspace').hidden=false;

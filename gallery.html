@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080914">
+  <meta name="description" content="Explore, collect and AI-enhance anime wallpapers with Waifu Wallpapers.">
+  <title>Waifu Wallpapers — Gallery Preview</title>
+  <link rel="stylesheet" href="./gallery.css">
+  <script src="./gallery.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./gallery.html" aria-label="Waifu Wallpapers homepage"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
+    <nav class="desktop-nav" aria-label="Primary">
+      <a href="#collection">Discover</a><a href="#how-it-works">How it works</a><a href="./index.html">AI studio</a>
+    </nav>
+    <button class="button button-small button-accent" type="button" id="openUpload"> <span aria-hidden="true">＋</span> Add wallpaper</button>
+  </header>
+  <main>
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-content">
+        <div class="eyebrow"><span class="pulse"></span> THE WALLPAPER EXPERIENCE · V2 PREVIEW</div>
+        <h1 id="hero-heading">Your screen.<br><em>Your universe.</em></h1>
+        <p>Collect beautiful anime art, explore your favorites, and transform wallpapers into sharp, high-resolution downloads using real, on-device AI.</p>
+        <div class="hero-actions">
+          <a class="button button-accent" href="#collection">Explore collection <span aria-hidden="true">↗</span></a>
+          <a class="button button-secondary" href="./index.html">Open AI studio <span aria-hidden="true">✦</span></a>
+        </div>
+        <div class="hero-foot"><span><b>2× / 4×</b> neural upscaling</span><span class="separator">/</span><span><b>No AI server</b> needed</span></div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="visual-glow"></div>
+        <div class="poster poster-left"><div class="poster-sky"></div><span>夢</span></div>
+        <div class="poster poster-main"><div class="poster-moon"></div><div class="poster-ridge"></div><div class="poster-label">NIGHTFALL <small>COLLECTION / 001</small></div></div>
+        <div class="poster poster-right"><div class="poster-sun"></div><span>夜</span></div>
+        <div class="visual-caption">ANIME INSPIRED / WALLPAPER ARCHIVE</div>
+      </div>
+    </section>
+
+    <div class="notice" role="note"><span class="notice-dot">●</span><p><strong>Gallery preview:</strong> Uploads here are saved privately in this browser only. They are <strong>not published online</strong>. Public uploads and shared gallery storage will be added when the R2 backend is connected.</p></div>
+
+    <section id="collection" class="collection" aria-labelledby="collection-heading">
+      <div class="section-top">
+        <div><div class="kicker">01 / YOUR COLLECTION</div><h2 id="collection-heading">The art you <em>keep.</em></h2><p>Test your gallery with your own wallpapers. One selection, then Original, AI 2× or AI 4×.</p></div>
+        <div class="count"><span id="collectionCount">00</span><small>WALLPAPERS</small></div>
+      </div>
+      <div class="toolbar">
+        <label class="search"><span aria-hidden="true">⌕</span><span class="sr-only">Search wallpapers</span><input id="search" type="search" placeholder="Search your collection…" autocomplete="off"></label>
+        <label class="select-wrap"><span class="sr-only">Filter by category</span><select id="categoryFilter" aria-label="Filter by category"><option value="all">All categories</option><option value="anime">Anime</option><option value="oled">Dark / OLED</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="other">Other</option></select></label>
+        <label class="select-wrap"><span class="sr-only">Sort wallpapers</span><select id="sort" aria-label="Sort wallpapers"><option value="recent">Newest first</option><option value="name">Title A–Z</option><option value="size">Largest resolution</option></select></label>
+      </div>
+      <div class="wall-grid" id="wallGrid" aria-live="polite"></div>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-art" aria-hidden="true"><span>✧</span><i></i><b>夜</b></div>
+        <div class="empty-copy"><div class="kicker">THE FIRST FRAME</div><h3>Your collection begins here.</h3><p>Choose your favorite anime wallpaper to see the gallery come alive. Files stay in your browser during this preview.</p><button class="button button-accent" type="button" id="emptyUpload">＋ Add first wallpaper</button></div>
+      </div>
+    </section>
+
+    <section class="feature-strip" id="how-it-works">
+      <div><span class="feat-icon">01</span><h3>Choose once</h3><p>Add a wallpaper to your local collection. No second upload to an external site.</p></div>
+      <div><span class="feat-icon">02</span><h3>Enhance locally</h3><p>2× and 4× AI processing uses the integrated waifu2x engine right inside this website.</p></div>
+      <div><span class="feat-icon">03</span><h3>Save in full quality</h3><p>Download the original instantly or save the final AI-enhanced PNG when it's ready.</p></div>
+    </section>
+  </main>
+  <footer><span>✦ WAIFU WALLPAPERS</span><p>Built for the art you love. This V2 collection is a local preview; sharing and public uploads are not yet enabled.</p><a href="./index.html">AI studio ↗</a></footer>
+
+  <dialog id="uploadDialog" class="modal" aria-labelledby="uploadHeading">
+    <div class="modal-head"><div><div class="kicker">ADD TO YOUR COLLECTION</div><h2 id="uploadHeading">Bring your art.</h2></div><button class="close" type="button" id="closeUpload" aria-label="Close upload dialog">×</button></div>
+    <form id="uploadForm">
+      <label class="upload-box" for="uploadFiles"><span>✧</span><strong>Choose wallpaper files</strong><small>PNG, JPG or WebP · up to 12 MB each · max 40 saved locally</small><input id="uploadFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple required></label>
+      <label class="field-label" for="uploadCategory">Category</label>
+      <select id="uploadCategory"><option value="anime">Anime</option><option value="oled">Dark / OLED</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="other">Other</option></select>
+      <p class="form-note">Private preview: these images are stored in your current browser, not on a public server.</p>
+      <p id="uploadStatus" role="status" aria-live="polite"></p>
+      <button class="button button-accent full" id="saveUpload" type="submit">Add to collection</button>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="modal detail-modal" aria-labelledby="detailTitle">
+    <button class="close detail-close" type="button" id="closeDetail" aria-label="Close wallpaper detail">×</button>
+    <div class="detail-grid">
+      <div class="detail-image"><img id="detailImg" alt="Selected wallpaper"></div>
+      <div class="detail-info">
+        <div class="kicker">WALLPAPER DETAILS</div><h2 id="detailTitle"></h2>
+        <div class="detail-category" id="detailCategory"></div>
+        <div class="stat-row"><span>Resolution</span><strong id="detailResolution"></strong></div>
+        <div class="stat-row"><span>File size</span><strong id="detailSize"></strong></div>
+        <div class="stat-row"><span>Format</span><strong id="detailFormat"></strong></div>
+        <div class="detail-actions"><button class="button button-secondary full" type="button" id="originalDownload">↓ Download original</button><button class="button button-accent full" type="button" id="enhance2x">✦ Enhance with AI · 2×</button><button class="button button-accent full" type="button" id="enhance4x">✦ Enhance with AI · 4×</button></div>
+        <p class="detail-note">AI enhancement opens our own integrated processor with this image preselected. Stay in the tab while it processes.</p>
+        <button class="remove-link" type="button" id="removeItem">Remove from this device</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

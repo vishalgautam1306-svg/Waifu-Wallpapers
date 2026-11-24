@@ -1,4 +1,5 @@
-import { makeBatchZip, cancelBatchWork, capabilities } from "./library-batch.js";
+const makeBatchZip=async()=>{throw new Error("Bulk download is disabled for now.")};
+const cancelBatchWork=()=>{};
 const DB_NAME="waifu-wallpapers-preview", STORE="wallpapers";
 const MAX_IMPORT=500, MAX_FILE=15*1024*1024;
 const LABELS={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OLED / Dark","fantasy":"Fantasy","scifi":"Sci-Fi","cyberpunk":"Cyberpunk","space":"Space & cosmos","nature":"Nature & scenery","cityscapes":"Cities & skylines","aesthetic":"Aesthetic","minimal":"Minimal","abstract":"Abstract","movies":"Movies & TV","3d":"3D art","cars":"Cars & vehicles","animals":"Animals","architecture":"Architecture","photography":"Photography","digitalart":"Digital art","horror":"Horror","kawaii":"Cute / Kawaii","seasonal":"Seasonal","sports":"Sports","other":"Other"};

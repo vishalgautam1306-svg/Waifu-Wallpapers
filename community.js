@@ -112,7 +112,7 @@ async function action(kind){
     else{
       const cacheId='community-'+id;
       await galleryStoreImage(cacheId,blob,item);
-      location.href='./index.html?fromGallery='+encodeURIComponent(cacheId)+'&scale='+(kind==='4x'?'4':'2');
+      location.href='./ai.html?fromGallery='+encodeURIComponent(cacheId)+'&scale='+(kind==='4x'?'4':'2');
       return;
     }
     $('downloadStatus').textContent='Original image downloaded.';

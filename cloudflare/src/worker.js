@@ -128,14 +128,14 @@ async function listAdmin(request,env){
  const r=valid==="all"?await env.DB.prepare(sql).all():await env.DB.prepare(sql).bind(valid).all();
  return reply(request,env,{items:(r.results||[]).map(fields)});
 }
-async function getImage(request,env,id,kind){
+async function getImage(request,env,id,kind,admin=false){
  const row=await env.DB.prepare("SELECT status,original_key,thumb_key,mime FROM wallpapers WHERE id=?").bind(id).first();
- if(!row||row.status!=="approved")return fail(request,env,404,"Not found");
+ if(!row||(!admin&&row.status!=="approved"))return fail(request,env,404,"Not found");
  const entry=await env.IMAGES.get(kind==="thumb"?row.thumb_key:row.original_key);
  if(!entry)return fail(request,env,404,"Not found");
  const headers=cors(request,env);
  headers.set("Content-Type",kind==="thumb"?(entry.httpMetadata?.contentType||"image/webp"):row.mime);
- headers.set("Cache-Control","public, max-age=300");
+ headers.set("Cache-Control",admin?"no-store":"public, max-age=300");
  headers.set("Content-Security-Policy","default-src 'none'; sandbox");
  return new Response(request.method==="HEAD"?null:entry.body,{status:200,headers});
 }
@@ -210,6 +210,8 @@ export default {
     const denied=ensureAdmin(request,env);
     if(denied)return denied;
     if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true});
+    const adminPic=/^\/api\/admin\/wallpapers\/([\da-f-]{36})\/(thumb|original)$/.exec(path);
+    if(adminPic&&["GET","HEAD"].includes(request.method))return getImage(request,env,adminPic[1],adminPic[2],true);
     if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);
     if(path==="/api/admin/upload"&&request.method==="POST")return upload(request,env);
     const editPath=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);

@@ -171,7 +171,7 @@ async function prepareBatch(files){
         drafts.push({file,...analysis,...metadata});
         pending.add(key);
       }catch(e){console.warn(file.name,e);invalid++;}
-      if(i%3===0){renderDrafts();await sleep();}
+      if(i%40===0) await sleep(); // Avoid rebuilding hundreds of preview cards repeatedly
     }
     $('importProgress').style.width='100%';
     renderDrafts();

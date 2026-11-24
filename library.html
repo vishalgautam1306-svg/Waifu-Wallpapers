@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#080914">
 <meta name="description" content="View the anime wallpapers you favorited, saved privately in this browser.">
 <title>My Favorites | Waifu Wallpapers</title>
-<link rel="stylesheet" href="./public.css"><style>.genre-section,.public-filter-row{display:none!important}.community-hero{min-height:335px}.community-hero h1{max-width:800px}.community-hero:before,.community-hero:after{opacity:.2}@media(max-width:700px){.community-hero{min-height:310px}}</style>
+<link rel="stylesheet" href="./public.css"><link rel="stylesheet" href="./viewer-v6.css"><style>.genre-section,.public-filter-row{display:none!important}.community-hero{min-height:335px}.community-hero h1{max-width:800px}.community-hero:before,.community-hero:after{opacity:.2}@media(max-width:700px){.community-hero{min-height:310px}}</style>
 
 <script src="./community-config.js"></script>
 <script src="./community.js" defer></script>
@@ -13,8 +13,8 @@
 <body>
 <header class="site-header">
   <a class="brand" href="./index.html"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
-  <nav class="desktop-nav" aria-label="Primary"><a href="#feed">Wallpapers</a><a href="#genres">Categories</a><a href="./index.html">Explore wallpapers</a><a href="./ai.html">AI studio</a></nav>
-  <a class="button button-small button-accent" href="./index.html">Browse all ↗</a>
+  <nav class="desktop-nav" aria-label="Primary"><a href="#feed">Wallpapers</a><a href="#genres">Categories</a><a href="./index.html">Explore wallpapers</a><a href="./ai.html">AI studio</a><a href="./admin.html">Owner Studio</a></nav>
+  <div class="header-cta"><a class="owner-link" href="./admin.html" aria-label="Owner Studio — admin login required">♢ <span>Owner Studio</span></a><a class="button button-small button-accent" href="./index.html">Browse all ↗</a></div>
 </header>
 <main>
   <section class="community-hero">
@@ -49,16 +49,47 @@
   </section>
   <section class="feature-strip"><div><span class="feat-icon">01</span><h3>Stored as originals</h3><p>Only compressed originals and preview thumbnails live in the cloud.</p></div><div><span class="feat-icon">02</span><h3>Community reviewed</h3><p>Only the owner can upload and publish. No account needed to browse.</p></div><div><span class="feat-icon">03</span><h3>AI on your device</h3><p>2× or 4× downloads are created when requested, without extra cloud storage.</p></div></section>
 </main>
-<footer><span>✦ WAIFU WALLPAPERS</span><p>Favorites are stored in this browser only. Clear site data and these bookmarks will disappear.</p><a href="./index.html">Explore all ↗</a></footer>
-<dialog id="publicDetail" class="modal detail-modal" aria-labelledby="publicTitle">
- <button class="close detail-close" type="button" id="publicClose" aria-label="Close wallpaper">×</button>
- <div class="detail-grid"><div class="detail-image"><img id="publicImage" alt="Wallpaper preview"></div><div class="detail-info">
-  <div class="kicker">COMMUNITY WALLPAPER</div><h2 id="publicTitle"></h2><div class="detail-category" id="publicDetailCategory"></div>
-  <div class="stat-row"><span>Resolution</span><strong id="publicRes"></strong></div>
-  <div class="stat-row"><span>Original size</span><strong id="publicSize"></strong></div>
-  <div class="detail-actions"><button type="button" class="button button-secondary full" id="publicOriginal">↓ Download original</button><button type="button" class="button button-accent full" id="public2x">✦ Enhance with AI · 2×</button><button type="button" class="button button-accent full" id="public4x">✦ Enhance with AI · 4×</button><button type="button" class="button button-secondary full" id="publicFavorite">♡ Save to favorites</button></div>
-  <p role="status" id="downloadStatus" class="detail-note" aria-live="polite">Enhancement runs locally. Keep the AI tab open until it finishes.</p>
- </div></div>
+<footer><span>✦ WAIFU WALLPAPERS</span><p>Favorites are stored in this browser only. Clear site data and these bookmarks will disappear.</p><a href="./index.html">Explore all ↗</a><a class="footer-owner" href="./admin.html">♢ Owner Studio (admin login)</a></footer>
+<dialog id="publicDetail" class="wallpaper-viewer" aria-labelledby="publicTitle">
+  <div class="viewer-shell">
+    <header class="viewer-toolbar">
+      <div class="viewer-path"><span class="viewer-brand-mark" aria-hidden="true">✦</span><span>WAIFU WALLPAPERS</span><span aria-hidden="true">/</span><span>WALLPAPER VIEWER</span></div>
+      <div class="viewer-tools">
+        <a id="publicExpand" class="viewer-mini-button" href="#" target="_blank" rel="noopener noreferrer" aria-label="Open original wallpaper in new tab">⤢ <span>View full image</span></a>
+        <button class="viewer-close" type="button" id="publicClose" aria-label="Close wallpaper viewer">✕ <span>Close</span></button>
+      </div>
+    </header>
+    <div class="viewer-grid">
+      <section class="viewer-artwork" aria-label="Selected wallpaper image">
+        <div id="viewerAmbient" class="viewer-ambient" aria-hidden="true"></div>
+        <div class="viewer-art-inner">
+          <img id="publicImage" alt="Wallpaper preview">
+        </div>
+        <div class="viewer-art-foot"><span>✧ ORIGINAL ARTWORK</span><span id="publicArtResolution"></span></div>
+      </section>
+      <aside class="viewer-details">
+        <div class="viewer-eyebrow"><span class="viewer-live-dot"></span> WALLPAPER DETAILS</div>
+        <h2 id="publicTitle"></h2>
+        <div class="viewer-series-line" id="publicDetailCategory"></div>
+        <p class="viewer-description" id="publicDescription"></p>
+        <div class="viewer-specs">
+          <div><span>Resolution</span><strong id="publicRes"></strong></div>
+          <div><span>File size</span><strong id="publicSize"></strong></div>
+          <div><span>Orientation</span><strong id="publicOrientation"></strong></div>
+          <div><span>Format</span><strong id="publicFormat"></strong></div>
+        </div>
+        <div class="viewer-actions">
+          <div class="viewer-actions-heading"><strong>Download wallpaper</strong><small>Free · No account needed</small></div>
+          <button type="button" class="viewer-download-primary" id="publicOriginal"><span aria-hidden="true">↓</span><span>Download original<small>Full original resolution</small></span></button>
+          <div class="viewer-ai-heading"><span aria-hidden="true">✦</span> ENHANCE WITH AI <span class="viewer-ai-note">On your device</span></div>
+          <div class="viewer-ai-row"><button type="button" id="public2x"><span>2× AI</span><small>Sharper details</small></button><button type="button" id="public4x"><span>4× AI</span><small>Ultra high resolution</small></button></div>
+          <button type="button" class="viewer-favorite" id="publicFavorite">♡ Save to favorites</button>
+          <p id="downloadStatus" class="viewer-status" role="status" aria-live="polite">AI enhancement runs locally in your browser.</p>
+        </div>
+        <div id="viewerTagsSection" class="viewer-tags-section" hidden><div class="viewer-tags-heading">DISCOVER MORE</div><div id="publicTags" class="viewer-tags"></div></div>
+      </aside>
+    </div>
+  </div>
 </dialog>
 </body>
 </html>

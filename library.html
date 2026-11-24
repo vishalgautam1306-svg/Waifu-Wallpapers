@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0c0d11">
+<meta name="description" content="Waifu Wallpapers V4. Collect, organize, import in bulk and download anime wallpapers with local AI 2× and 4× enhancement.">
+<title>Waifu Wallpapers — Library V4</title>
+<link rel="stylesheet" href="./library.css">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0-dev.20260812-74c8ca5b3a/dist/ort.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.8.11/dist/zip.min.js" defer></script>
+<script type="module" src="./library.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="rail" aria-label="Main navigation" id="rail">
+    <a href="./library.html" class="brand"><span class="brand-symbol">✳</span><span>WAIFU<br><b>WALLPAPERS</b></span></a>
+    <div class="rail-label">EXPLORE</div>
+    <nav class="rail-nav" aria-label="Collections">
+      <a class="active" href="#browse"><span class="navicon">▦</span> All wallpapers</a>
+      <button type="button" data-quick="anime"><span class="navicon">✧</span> Anime</button>
+      <button type="button" data-quick="oled"><span class="navicon">☾</span> OLED / Dark</button>
+      <button type="button" data-quick="fantasy"><span class="navicon">◇</span> Fantasy</button>
+      <button type="button" data-quick="scifi"><span class="navicon">⌘</span> Sci-Fi</button>
+      <a href="./community.html"><span class="navicon">◎</span> Community <span class="minor">SOON</span></a>
+    </nav>
+    <div class="rail-label space">YOUR WORKSPACE</div>
+    <nav class="rail-nav" aria-label="Tools">
+      <button id="railImport" type="button"><span class="navicon">↥</span> Bulk importer</button>
+      <button id="railBatch" type="button"><span class="navicon">☷</span> Batch download</button>
+      <a href="./index.html"><span class="navicon">✦</span> AI upscaler</a>
+    </nav>
+    <div class="rail-bottom">
+      <div class="rail-quote">A home for the artwork<br>that stays with you.</div>
+      <div class="version">V4 / LOCAL COLLECTION PREVIEW</div>
+    </div>
+  </aside>
+  <div class="app">
+    <header class="topbar">
+      <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open navigation">☰</button>
+      <label class="search-field" for="searchInput"><span class="search-icon">⌕</span><input id="searchInput" type="search" autocomplete="off" placeholder="Search characters, series, styles…"><span class="key">⌕</span></label>
+      <div class="header-actions">
+        <button type="button" class="icon-button" id="exportCsv" title="Export all library metadata as CSV" aria-label="Export metadata CSV">⇩ <span class="action-label">CSV</span></button>
+        <button type="button" class="outline-button" id="headerBatch">☷ <span class="action-label">Batch download</span><span id="topSelected">0</span></button>
+        <button type="button" class="primary-button" id="headerImport">＋ <span class="action-label">Import wallpapers</span></button>
+      </div>
+    </header>
+
+    <main id="browse" class="main">
+      <div class="eyebrow"><span class="tiny-star">✶</span> YOUR PERSONAL WALLPAPER LIBRARY <span class="light-dot">●</span> V4 PREVIEW</div>
+      <section class="hero-row">
+        <div>
+          <h1>Discover your next <em>favorite.</em></h1>
+          <p>Build your collection. Find the right artwork. Download originals or enhance with actual on-device AI—one wallpaper or an entire selection.</p>
+        </div>
+        <div class="hero-monogram" aria-hidden="true"><span>夜</span><div class="ring1"></div><div class="ring2"></div></div>
+      </section>
+      <section class="notice" aria-label="Storage status"><span class="notice-mark">i</span><div><strong>Personal preview mode</strong><span> Imports live in this browser, not public cloud storage. Bulk import works now; permanent sharing requires your Cloudflare account.</span></div><a href="./community.html">Cloud roadmap ↗</a></section>
+
+      <section class="quick-section" aria-labelledby="quickHeading">
+        <div class="section-head"><div><span class="overline">BROWSE BY MOOD</span><h2 id="quickHeading">Find your vibe.</h2></div><button type="button" id="clearAll" class="text-link">Clear filters ↗</button></div>
+        <div class="quick-grid" id="quickGrid">
+          <button type="button" data-quick="all" class="quick-card mood-all"><span class="shape-art shape-all">✴</span><strong>Everything</strong><small>The whole archive</small></button>
+          <button type="button" data-quick="anime" class="quick-card mood-anime"><span class="shape-art shape-anime">あ</span><strong>Anime</strong><small>Characters & series</small></button>
+          <button type="button" data-quick="oled" class="quick-card mood-oled"><span class="shape-art shape-oled">◉</span><strong>OLED / Dark</strong><small>Perfect for black screens</small></button>
+          <button type="button" data-quick="fantasy" class="quick-card mood-fantasy"><span class="shape-art shape-fantasy">✦</span><strong>Fantasy</strong><small>Dreamlike scenes</small></button>
+          <button type="button" data-quick="scifi" class="quick-card mood-scifi"><span class="shape-art shape-scifi">⌘</span><strong>Sci-Fi</strong><small>Future worlds</small></button>
+        </div>
+      </section>
+
+      <section class="archive" aria-labelledby="archiveHeading">
+        <div class="section-head archive-head">
+          <div><span class="overline">YOUR ARCHIVE / <span id="totalCount">0</span> WALLPAPERS</span><h2 id="archiveHeading">The collection<span class="period">.</span></h2></div>
+          <div class="archive-actions">
+            <button type="button" class="outline-button small" id="selectVisible">☑ Select visible</button>
+            <button type="button" class="outline-button small" id="clearSelection">Clear selection</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <label for="category" class="sr-only">Filter categories</label>
+          <select id="category"><option value="all">All categories</option><option value="anime">Anime</option><option value="oled">OLED / Dark</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="other">Other</option></select>
+          <label for="series" class="sr-only">Filter by series</label><select id="series"><option value="all">All series</option></select>
+          <label for="orientation" class="sr-only">Filter by orientation</label>
+          <select id="orientation"><option value="all">Any orientation</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select>
+          <label for="sort" class="sr-only">Sort wallpapers</label>
+          <select id="sort"><option value="recent">Newest first</option><option value="name">Title A–Z</option><option value="res">Highest resolution</option></select>
+          <span class="spacer"></span><span class="match-count" id="matchedCount"></span>
+        </div>
+        <div id="wallGrid" class="wall-grid" aria-live="polite"></div>
+        <div id="empty" class="empty">
+          <div class="empty-icon">✳</div><h3 id="emptyHeading">Your archive is waiting.</h3>
+          <p id="emptyCopy">Import your wallpapers in bulk, then browse them like a real wallpaper platform.</p>
+          <button class="primary-button" id="emptyImport" type="button">＋ Import your first batch</button>
+        </div>
+        <div class="loadmore"><button type="button" class="outline-button" id="loadMore" hidden>Show more wallpapers ↓</button></div>
+      </section>
+      <footer><span>✳ WAIFU WALLPAPERS</span><span>Designed for anime art · V4 preview</span><a href="./index.html">AI Studio ↗</a></footer>
+    </main>
+  </div>
+</div>
+
+<div class="selection-dock" id="selectionDock" hidden><div><span class="dock-number" id="dockNumber">0</span><div><strong>Selected wallpapers</strong><small>Set each image's output quality</small></div></div><div class="dock-buttons"><button type="button" id="dockClear" class="outline-button small">Clear</button><button type="button" id="dockBatch" class="primary-button">Prepare batch ↗</button></div></div>
+<div class="overlay" id="overlay" hidden></div>
+<aside class="batch-panel" id="batchPanel" aria-label="Batch download queue" aria-hidden="true">
+  <div class="panel-head"><div><span class="overline">BATCH ENGINE / ON-DEVICE</span><h2>Download queue<span class="period">.</span></h2></div><button type="button" class="close-button" id="batchClose" aria-label="Close batch panel">×</button></div>
+  <p class="panel-sub">Mix original, 2× and 4× in one ZIP. The neural engine processes enhanced images <strong>one at a time</strong>, so memory use stays manageable.</p>
+  <div class="batch-tools"><label for="defaultQuality">Set every selected image to</label><select id="defaultQuality"><option value="original">Original</option><option value="2">AI 2×</option><option value="4">AI 4×</option></select><button type="button" class="outline-button small" id="applyQuality">Apply</button></div>
+  <div class="batch-list" id="batchList"></div>
+  <div class="batch-status">
+    <div class="status-row"><strong id="batchStatus">Ready to prepare.</strong><span id="batchPct">0%</span></div>
+    <div class="progress"><span id="batchProgress"></span></div>
+    <p id="batchDetail" aria-live="polite">Files are not uploaded to an AI server.</p>
+  </div>
+  <div class="panel-bottom"><button type="button" id="cancelBatch" class="outline-button" disabled>Cancel</button><button type="button" id="startBatch" class="primary-button">Download ZIP ↓</button></div>
+  <small class="warning">Keep this tab active. AI processing is slower on phones, and large 4× images may exceed browser memory. Batch ZIPs are best on laptops.</small>
+</aside>
+
+<dialog id="importDialog" class="import-dialog" aria-labelledby="importHeading">
+  <div class="dialog-header"><div><span class="overline">BULK IMPORT / SMART DRAFTS</span><h2 id="importHeading">Bring your entire collection<span class="period">.</span></h2><p>Choose up to 100 images per batch. Repeat as needed, subject to your browser's available storage.</p></div><button type="button" class="close-button" id="importClose" aria-label="Close import dialog">×</button></div>
+  <div class="dropzone" id="dropzone"><div class="drop-icon">↥</div><h3>Drop images here</h3><p>PNG, JPG and WebP · up to 10 MB per image</p><div class="drop-actions"><label class="primary-button file-label" for="bulkFiles">＋ Choose images</label><input id="bulkFiles" type="file" multiple accept="image/png,image/jpeg,image/webp" hidden><label class="outline-button file-label" for="bulkFolder">📁 Choose folder (PC)</label><input id="bulkFolder" type="file" webkitdirectory multiple hidden></div></div>
+  <div class="import-note"><span>✦ SMART DRAFTS</span> Titles and series are suggested from filenames; dark/OLED styling is estimated from image pixels. <strong>This is not an AI character-recognition model</strong>—please review suggestions before publishing.</div>
+  <div class="import-summary" id="importSummary" hidden><strong id="importCount">0 files prepared</strong><span id="importErrors"></span></div>
+  <div class="draft-list" id="draftList"></div>
+  <div class="progress import-progress" id="importTrack" hidden><span id="importProgress"></span></div>
+  <p class="import-status" id="importStatus" role="status" aria-live="polite"></p>
+  <div class="dialog-actions"><button type="button" class="outline-button" id="clearDrafts">Clear drafts</button><button type="button" class="primary-button" id="saveDrafts" disabled>Save to local collection ↗</button></div>
+</dialog>
+
+<dialog id="detailDialog" class="detail-dialog" aria-labelledby="detailTitle">
+  <button class="close-button detail-close" type="button" id="detailClose" aria-label="Close">×</button>
+  <div class="detail-grid"><div class="detail-visual"><img id="detailImage" alt="Wallpaper"></div><div class="detail-content">
+    <span class="overline">WALLPAPER / DETAILS</span><h2 id="detailTitle"></h2><div class="detail-stats"><span id="detailDimensions"></span><span id="detailSize"></span></div>
+    <label for="detailName">Title</label><input id="detailName" maxlength="90" type="text">
+    <label for="detailSeries">Anime / game series</label><input id="detailSeries" maxlength="80" type="text" placeholder="Unknown / original">
+    <label for="detailCategory">Category</label><select id="detailCategory"><option value="anime">Anime</option><option value="oled">OLED / Dark</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="other">Other</option></select>
+    <label for="detailDescription">Description</label><textarea id="detailDescription" maxlength="280" rows="2"></textarea>
+    <label for="detailTags">Tags (comma-separated)</label><input id="detailTags" maxlength="240" type="text">
+    <button type="button" class="outline-button" id="saveDetails">Save details</button>
+    <div class="detail-actions"><button type="button" class="outline-button" id="detailOriginal">↓ Original</button><button type="button" class="primary-button" id="detail2x">✦ AI 2×</button><button type="button" class="primary-button" id="detail4x">✦ AI 4×</button></div>
+    <button type="button" class="delete-action" id="detailDelete">Remove from this browser</button>
+  </div></div>
+</dialog>
+</body>
+</html>

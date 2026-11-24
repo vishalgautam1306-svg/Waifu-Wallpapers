@@ -4,7 +4,7 @@
 // There is deliberately NO public upload route, no user-facing credentials, and no token in frontend source.
 const MAX_IMAGE = 15 * 1024 * 1024;
 const MAX_THUMB = 500 * 1024;
-const CAT = new Set(["anime","oled","fantasy","scifi","nature","aesthetic","minimal","abstract","movies","3d","other"]);
+const CAT = new Set(["anime","manga","gaming","oled","fantasy","scifi","cyberpunk","space","nature","cityscapes","aesthetic","minimal","abstract","movies","3d","cars","animals","architecture","photography","digitalart","horror","kawaii","seasonal","sports","other"]);
 const allowedOrigins = env => (env.ALLOWED_ORIGINS || "").split(",").map(x=>x.trim()).filter(Boolean);
 const cors = (request,env) => {
  const h = new Headers({"Vary":"Origin","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"});
@@ -89,7 +89,7 @@ function dimensions(bytes, mime) {
       const length = view.getUint16(i, false);
       if (length < 2 || i + length > bytes.length) return null;
       const isSOF = [0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker);
-      if (isSOF && length >= 7) return [view.getUint16(i + 3, false), view.getUint16(i + 1 + 4, false)];
+      if (isSOF && length >= 7) return [view.getUint16(i + 5, false), view.getUint16(i + 3, false)];
       i += length;
     }
     return null;

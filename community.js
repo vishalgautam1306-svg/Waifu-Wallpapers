@@ -2,7 +2,8 @@
 const $=id=>document.getElementById(id);
 const CATS={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OLED / Dark","fantasy":"Fantasy","scifi":"Sci-Fi","cyberpunk":"Cyberpunk","space":"Space & cosmos","nature":"Nature & scenery","cityscapes":"Cities & skylines","aesthetic":"Aesthetic","minimal":"Minimal","abstract":"Abstract","movies":"Movies & TV","3d":"3D art","cars":"Cars & vehicles","animals":"Animals","architecture":"Architecture","photography":"Photography","digitalart":"Digital art","horror":"Horror","kawaii":"Cute / Kawaii","seasonal":"Seasonal","sports":"Sports","other":"Other"};
 const FAV_KEY='waifu-wallpapers-public-favorites';
-let api='',items=[],page=null,busy=false,selected=null,onlyFavorites=false,favorites={};
+const favoritesPage=/\/library\.html$/.test(location.pathname);
+let api='',items=[],page=null,busy=false,selected=null,onlyFavorites=favoritesPage,favorites={};
 try{favorites=JSON.parse(localStorage.getItem(FAV_KEY)||'{}')||{};}catch(_){favorites={};}
 function saveFavorites(){try{localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}catch(_){}}
 function favorite(item){
@@ -102,9 +103,9 @@ async function init(){
  $('public4x').addEventListener('click',()=>perform('4'));
  $('publicFavorite').addEventListener('click',()=>{if(selected)favorite(selected);});
  $('publicClose').addEventListener('click',()=>$('publicDetail').close());
- $('publicFavorites').addEventListener('click',()=>{onlyFavorites=!onlyFavorites;render();});
+ $('publicFavorites').addEventListener('click',()=>{if(favoritesPage){location.assign('./index.html');return;}onlyFavorites=!onlyFavorites;render();});
  $('loadMore').addEventListener('click',()=>load());
- const reload=()=>{onlyFavorites=false;load(true);};
+ const reload=()=>{onlyFavorites=favoritesPage;load(true);};
  $('publicCategory').addEventListener('change',()=>{syncGenres();reload();});
  for(const btn of document.querySelectorAll('[data-publiccat]'))btn.addEventListener('click',()=>{
    $('publicCategory').value=btn.dataset.publiccat;

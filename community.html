@@ -14,16 +14,33 @@
 <body>
 <header class="site-header">
   <a class="brand" href="./gallery.html"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
-  <nav class="desktop-nav" aria-label="Primary"><a href="./gallery.html">Local collection</a><a href="./ai.html">AI studio</a><a href="#feed">Explore</a></nav>
-  <a class="button button-small button-accent" href="./admin.html">Owner studio ↗</a>
+  <nav class="desktop-nav" aria-label="Primary"><a href="#feed">Wallpapers</a><a href="#genres">Categories</a><a href="./library.html">My collection</a><a href="./ai.html">AI studio</a></nav>
+  <a class="button button-small button-accent" href="./ai.html">✦ AI Upscaler</a>
 </header>
 <main>
   <section class="community-hero">
-    <span class="eyebrow"><span class="pulse"></span> THE COMMUNITY COLLECTION</span>
-    <h1>Find a new <em>universe.</em></h1>
-    <p>Anime characters, enchanted scenery, vivid worlds and OLED-friendly artwork. Explore the public collection by series, category, mood or tag, then download or enhance with AI.</p>
+    <span class="eyebrow"><span class="pulse"></span> THE ANIME WALLPAPER UNIVERSE</span>
+    <h1>Anime worlds.<br><em>Infinite screens.</em></h1>
+    <p>Discover beautiful anime art, dreamy landscapes, game worlds and OLED wallpapers. Search by character, series or tags. Download the original—or enhance it with real 2×/4× AI.</p>
     <div class="hero-actions"><a class="button button-accent" href="#feed">Explore wallpapers ↗</a><a class="button button-secondary" href="./ai.html">AI upscaler ✦</a></div>
   </section>
+<section id="genres" class="genre-section" aria-labelledby="genreHeading">
+  <div class="genre-head"><div><div class="kicker">EXPLORE BY CATEGORY</div><h2 id="genreHeading">Find your <em>world.</em></h2></div><span>25 ways to discover</span></div>
+  <div class="genre-scroll">
+    <button type="button" data-publiccat="" class="genre active"><i>✧</i><strong>All art</strong></button>
+    <button type="button" data-publiccat="anime" class="genre"><i>あ</i><strong>Anime</strong></button>
+    <button type="button" data-publiccat="manga" class="genre"><i>漫</i><strong>Manga</strong></button>
+    <button type="button" data-publiccat="gaming" class="genre"><i>◈</i><strong>Gaming</strong></button>
+    <button type="button" data-publiccat="oled" class="genre"><i>☾</i><strong>OLED</strong></button>
+    <button type="button" data-publiccat="fantasy" class="genre"><i>✦</i><strong>Fantasy</strong></button>
+    <button type="button" data-publiccat="cyberpunk" class="genre"><i>⌁</i><strong>Cyberpunk</strong></button>
+    <button type="button" data-publiccat="space" class="genre"><i>☄</i><strong>Cosmos</strong></button>
+    <button type="button" data-publiccat="nature" class="genre"><i>❀</i><strong>Nature</strong></button>
+    <button type="button" data-publiccat="cityscapes" class="genre"><i>♢</i><strong>Cityscapes</strong></button>
+    <button type="button" data-publiccat="kawaii" class="genre"><i>♡</i><strong>Kawaii</strong></button>
+    <button type="button" data-publiccat="digitalart" class="genre"><i>✎</i><strong>Digital art</strong></button>
+  </div>
+</section>
   <div class="notice community-notice" role="status"><span class="notice-dot">●</span><p id="connectionState">Connecting to wallpaper storage…</p></div>
   <section class="collection" id="feed" aria-labelledby="feed-heading">
     <div class="section-top"><div><div class="kicker">PUBLIC COLLECTION / ORIGINALS</div><h2 id="feed-heading">The wallpaper <em>archive.</em></h2><p>Only reviewed wallpapers are visible here. Every AI enhancement runs locally on your device.</p></div></div>
@@ -33,7 +50,7 @@
   </section>
   <section class="feature-strip"><div><span class="feat-icon">01</span><h3>Stored as originals</h3><p>Only compressed originals and preview thumbnails live in the cloud.</p></div><div><span class="feat-icon">02</span><h3>Community reviewed</h3><p>Submissions stay private until approved. No accounts needed.</p></div><div><span class="feat-icon">03</span><h3>AI on your device</h3><p>2× or 4× downloads are created when requested, without extra cloud storage.</p></div></section>
 </main>
-<footer><span>✦ WAIFU WALLPAPERS</span><p>Admin uploads only. Browse and download freely; guest favorites stay in this browser.</p><a href="./ai.html">AI Studio ↗</a></footer>
+<footer><span>✦ WAIFU WALLPAPERS</span><p>Free browsing and downloads · Guest favorites stay in your browser · Admin-only publishing</p><a href="./admin.html">Owner studio ↗</a></footer>
 <dialog id="publicDetail" class="modal detail-modal" aria-labelledby="publicTitle">
  <button class="close detail-close" type="button" id="publicClose" aria-label="Close wallpaper">×</button>
  <div class="detail-grid"><div class="detail-image"><img id="publicImage" alt="Wallpaper preview"></div><div class="detail-info">

@@ -1,24 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "waifu-wallpapers-api",
+  "account_id": "59208243141c0c773a3bbb5e65f2b180",
   "main": "src/worker.js",
   "compatibility_date": "2026-11-23",
   "workers_dev": true,
   "vars": {
-    "ALLOWED_ORIGINS": "https://waifu-wallpapers.vercel.app",
-    "TURNSTILE_SITE_KEY": ""
+    "ALLOWED_ORIGINS": "https://waifu-wallpapers.vercel.app"
   },
   "r2_buckets": [
-    {
-      "binding": "IMAGES",
-      "bucket_name": "waifu-wallpapers-images"
-    }
+    {"binding": "IMAGES", "bucket_name": "waifu-wallpapers-images"}
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "waifu-wallpapers-db",
-      "database_id": "REPLACE_WITH_REAL_D1_DATABASE_ID",
+      "database_id": "a964aaa1-a150-4579-a833-b7c81c805120",
       "migrations_dir": "migrations"
     }
   ]

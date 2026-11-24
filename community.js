@@ -115,7 +115,7 @@ async function init(){
  let searchTimer;for(const id of ['publicSearch','publicTag'])$(id).addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reload,270);});
 
  if(!configured){info('Cloudflare storage has not been enabled yet. Public catalog setup is in progress.',true);page=null;render();return;}
- try{const url=new URL(configured);if(url.protocol!=='https:')throw new Error('HTTPS required');api=url.origin+url.pathname;await load(true);}
+ try{const url=new URL(configured);if(url.protocol!=='https:')throw new Error('HTTPS required');api=url.origin+url.pathname.replace(/\/+$/,'');await load(true);}
  catch(e){info('Could not connect to storage: '+e.message,true);render();}
 }
 document.addEventListener('DOMContentLoaded',init);

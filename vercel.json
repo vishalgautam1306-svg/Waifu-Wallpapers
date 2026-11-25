@@ -5,10 +5,6 @@
       "destination": "https://unlimited.waifu2x.net/models/:path*"
     },
     {
-      "source": "/community.html",
-      "destination": "/index.html"
-    },
-    {
       "source": "/gallery.html",
       "destination": "/library.html"
     }

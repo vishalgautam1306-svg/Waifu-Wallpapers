@@ -231,11 +231,15 @@ async function listPublic(request,env){
  const category=text(params.get("category"),30);
  const series=text(params.get("series"),80).toLowerCase();
  const tag=text(params.get("tag"),40).toLowerCase().replace(/^#/,"");
+ const orient=text(params.get("orientation"),20).toLowerCase();
  const where=["status='approved'"],bind=[];
  if(search){where.push("(LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(series) LIKE ? OR LOWER(tags_json) LIKE ?)");for(let i=0;i<4;i++)bind.push("%"+search+"%");}
  if(CAT.has(category)){where.push("category=?");bind.push(category);}
  if(series){where.push("LOWER(series)=?");bind.push(series);}
  if(tag){where.push("LOWER(tags_json) LIKE ?");bind.push("%"+tag+"%");}
+ if(orient==="landscape")where.push("width*100>height*112");
+ if(orient==="portrait")where.push("height*100>width*112");
+ if(orient==="square")where.push("width*100<=height*112 AND height*100<=width*112");
  const sql="SELECT * FROM wallpapers WHERE "+where.join(" AND ")+" ORDER BY created_at DESC LIMIT ? OFFSET ?";
  const result=await env.DB.prepare(sql).bind(...bind,limit+1,page*limit).all();
  const rows=result.results||[];
@@ -316,6 +320,139 @@ async function change(request,env,id){
  await audit(env,"visibility_"+body.status,(await fingerprints(request,env)).ip,id);
  return reply(request,env,{id,status:body.status});
 }
+
+// Community is isolated from the owner media upload path. No guest image uploads exist.
+const CHAT_RETENTION_MS=30*24*3600*1000;
+const CHAT_INTERVAL_MS=30*1000;
+const CHAT_HOURLY_CAP=24;
+function validCommunityOrigin(request,env){
+ const origin=request.headers.get("Origin")||"";
+ return !!origin&&(allowedOrigins(env).includes(origin)||/^https:\/\/waifu-wallpapers-[a-z0-9]+-myself-adc5\.vercel\.app$/.test(origin));
+}
+async function communityEnabled(env,setting){
+ const result=await env.DB.prepare("SELECT value FROM community_settings WHERE setting=?").bind(setting).first();
+ return result?.value==="1";
+}
+async function communityStatus(request,env){
+ return reply(request,env,{chatEnabled:await communityEnabled(env,"chat_enabled"),pollsEnabled:await communityEnabled(env,"polls_enabled"),guestUpload:false,chatRefreshSeconds:12,chatRetentionDays:30});
+}
+async function communityMessages(request,env){
+ const limit=Math.min(80,Math.max(1,Number(new URL(request.url).searchParams.get("limit"))||60));
+ const result=await env.DB.prepare("SELECT id,nickname,body,created_at FROM community_messages WHERE status='visible' AND created_at>? ORDER BY created_at DESC LIMIT ?").bind(Date.now()-CHAT_RETENTION_MS,limit).all();
+ return reply(request,env,{items:(result.results||[]).reverse().map(x=>({id:x.id,nickname:x.nickname,body:x.body,createdAt:x.created_at}))});
+}
+async function postCommunityMessage(request,env){
+ if(!await communityEnabled(env,"chat_enabled"))return fail(request,env,403,"Chat is temporarily closed by the owner.");
+ if(!validCommunityOrigin(request,env))return fail(request,env,403,"Unsupported website origin");
+ if(!(request.headers.get("Content-Type")||"").startsWith("application/json"))return fail(request,env,415,"JSON required");
+ if(Number(request.headers.get("Content-Length"))>1100)return fail(request,env,413,"Message too long");
+ const data=await request.json().catch(()=>null);
+ let nickname=typeof data?.nickname==="string"?text(data.nickname,24).replace(/\s+/g," "):"";
+ let body=typeof data?.body==="string"?text(data.body,240).replace(/\s+/g," "):"";
+ if(nickname.length<2||body.length<2||body.length>240)return fail(request,env,400,"Nickname and message must be at least two characters");
+ if(!/^[\p{L}\p{N} _.-]{2,24}$/u.test(nickname))return fail(request,env,400,"Nickname must contain letters, numbers or spaces");
+ if(/(?:https?:\/\/|www\.|\b\S+@\S+\.\w{2,}\b|(?:\+?\d[\d \-]{8,}\d))/i.test(body))return fail(request,env,400,"No links, email addresses or phone numbers in public chat.");
+ if(/(.)\1{12,}/u.test(body))return fail(request,env,400,"Please avoid repeated-character spam");
+ const now=Date.now(),fp=await fingerprints(request,env);
+ const rate=await env.DB.prepare("SELECT COUNT(*) AS n,MAX(created_at) AS last FROM community_messages WHERE ip_hash=? AND created_at>?").bind(fp.ip,now-3600000).first();
+ if((rate?.n||0)>=CHAT_HOURLY_CAP)return fail(request,env,429,"Message limit reached for this hour. Please return later.");
+ if(rate?.last&&now-rate.last<CHAT_INTERVAL_MS)return fail(request,env,429,"You can post one message every 30 seconds.");
+ const id=crypto.randomUUID();
+ await env.DB.prepare("INSERT INTO community_messages(id,nickname,body,ip_hash,created_at,status) VALUES (?,?,?,?,?,'visible')").bind(id,nickname,body,fp.ip,now).run();
+ return reply(request,env,{ok:true,id,createdAt:now},201);
+}
+async function reportCommunityMessage(request,env,id){
+ if(!validCommunityOrigin(request,env))return fail(request,env,403,"Unsupported website origin");
+ const item=await env.DB.prepare("SELECT id FROM community_messages WHERE id=? AND status='visible'").bind(id).first();
+ if(!item)return fail(request,env,404,"Message not found");
+ const fp=await fingerprints(request,env);
+ const recent=await env.DB.prepare("SELECT COUNT(*) AS n FROM community_reports WHERE reporter_hash=? AND created_at>?").bind(fp.ip,Date.now()-86400000).first();
+ if((recent?.n||0)>=10)return fail(request,env,429,"Daily report limit reached.");
+ await env.DB.prepare("INSERT OR IGNORE INTO community_reports(message_id,reporter_hash,created_at) VALUES (?,?,?)").bind(id,fp.ip,Date.now()).run();
+ return reply(request,env,{reported:true});
+}
+async function listCommunityPolls(request,env){
+ const result=await env.DB.prepare("SELECT id,question,options_json,status,created_at FROM community_polls ORDER BY created_at DESC LIMIT 12").all();
+ const polls=result.results||[];
+ const mapped=[];
+ for(const poll of polls){
+  const options=JSON.parse(poll.options_json||"[]");
+  const votes=await env.DB.prepare("SELECT option_index,COUNT(*) AS n FROM community_votes WHERE poll_id=? GROUP BY option_index").bind(poll.id).all();
+  const counts=Array(options.length).fill(0);
+  for(const vote of votes.results||[])if(Number.isInteger(vote.option_index)&&vote.option_index>=0&&vote.option_index<counts.length)counts[vote.option_index]=vote.n;
+  mapped.push({id:poll.id,question:poll.question,options,status:poll.status,createdAt:poll.created_at,counts,totalVotes:counts.reduce((n,v)=>n+v,0)});
+ }
+ return reply(request,env,{items:mapped});
+}
+async function voteCommunityPoll(request,env,id){
+ if(!await communityEnabled(env,"polls_enabled"))return fail(request,env,403,"Voting is currently closed");
+ if(!validCommunityOrigin(request,env))return fail(request,env,403,"Unsupported website origin");
+ if(Number(request.headers.get("Content-Length"))>300)return fail(request,env,413,"Invalid vote");
+ const body=await request.json().catch(()=>null);
+ const poll=await env.DB.prepare("SELECT options_json,status FROM community_polls WHERE id=?").bind(id).first();
+ if(!poll)return fail(request,env,404,"Poll not found");
+ if(poll.status!=="active")return fail(request,env,403,"Poll is closed");
+ const options=JSON.parse(poll.options_json||"[]");
+ if(!Number.isInteger(body?.option)||body.option<0||body.option>=options.length)return fail(request,env,400,"Select a valid option");
+ const fp=await fingerprints(request,env),voter=await digest("poll:"+id+":"+fp.ip+":"+fp.ua);
+ const result=await env.DB.prepare("INSERT OR IGNORE INTO community_votes(poll_id,voter_hash,option_index,created_at) VALUES (?,?,?,?)").bind(id,voter,body.option,Date.now()).run();
+ if((result.meta?.changes||0)===0)return fail(request,env,409,"You have already voted in this poll.");
+ return reply(request,env,{ok:true},201);
+}
+async function adminCommunitySettings(request,env){
+ if(request.method==="GET"){
+  const result=await env.DB.prepare("SELECT setting,value FROM community_settings").all();
+  return reply(request,env,{settings:Object.fromEntries((result.results||[]).map(x=>[x.setting,x.value==="1"]))});
+ }
+ const body=await request.json().catch(()=>null);
+ if(!body||typeof body!=="object")return fail(request,env,400,"Invalid settings");
+ const records=[["chatEnabled","chat_enabled"],["pollsEnabled","polls_enabled"]].filter(([key])=>typeof body[key]==="boolean");
+ if(!records.length)return fail(request,env,400,"Provide a boolean setting");
+ for(const [key,setting] of records)await env.DB.prepare("INSERT INTO community_settings(setting,value) VALUES (?,?) ON CONFLICT(setting) DO UPDATE SET value=excluded.value").bind(setting,body[key]?"1":"0").run();
+ await audit(env,"community_settings",(await fingerprints(request,env)).ip);
+ return adminCommunitySettings(new Request(request.url,{method:"GET"}),env);
+}
+async function createCommunityPoll(request,env){
+ const body=await request.json().catch(()=>null);
+ const question=text(body?.question||"",150);
+ const options=Array.isArray(body?.options)?body.options.map(x=>text(x,75)).filter(Boolean):[];
+ if(question.length<8||options.length<2||options.length>6||new Set(options.map(x=>x.toLowerCase())).size!==options.length)return fail(request,env,400,"Provide a clear question and 2–6 distinct options");
+ const id=crypto.randomUUID(),now=Date.now();
+ await env.DB.prepare("INSERT INTO community_polls(id,question,options_json,status,created_at) VALUES (?,?,?,'active',?)").bind(id,question,JSON.stringify(options),now).run();
+ await audit(env,"poll_created",(await fingerprints(request,env)).ip,id);
+ return reply(request,env,{ok:true,id},201);
+}
+async function setCommunityPoll(request,env,id){
+ const body=await request.json().catch(()=>null);
+ if(!["active","closed"].includes(body?.status))return fail(request,env,400,"Invalid poll status");
+ const result=await env.DB.prepare("UPDATE community_polls SET status=? WHERE id=?").bind(body.status,id).run();
+ if((result.meta?.changes||0)===0)return fail(request,env,404,"Poll not found");
+ await audit(env,"poll_"+body.status,(await fingerprints(request,env)).ip,id);
+ return reply(request,env,{ok:true,status:body.status});
+}
+async function adminChatList(request,env){
+ const messages=await env.DB.prepare("SELECT m.id,m.nickname,m.body,m.status,m.created_at,COUNT(r.reporter_hash) AS reports FROM community_messages m LEFT JOIN community_reports r ON r.message_id=m.id GROUP BY m.id ORDER BY m.created_at DESC LIMIT 100").all();
+ return reply(request,env,{items:(messages.results||[]).map(m=>({id:m.id,nickname:m.nickname,body:m.body,status:m.status,createdAt:m.created_at,reports:m.reports}))});
+}
+async function adminChatModerate(request,env,id){
+ const body=await request.json().catch(()=>null);
+ if(!["hidden","visible"].includes(body?.status))return fail(request,env,400,"Status must be hidden or visible");
+ const result=await env.DB.prepare("UPDATE community_messages SET status=? WHERE id=?").bind(body.status,id).run();
+ if((result.meta?.changes||0)===0)return fail(request,env,404,"Message not found");
+ await audit(env,"chat_"+body.status,(await fingerprints(request,env)).ip,id);
+ return reply(request,env,{ok:true});
+}
+async function publicWallpaperDetails(request,env,id){
+ const row=await env.DB.prepare("SELECT * FROM wallpapers WHERE id=? AND status='approved'").bind(id).first();
+ return row?reply(request,env,fields(row)):fail(request,env,404,"Wallpaper not found");
+}
+async function publicRelated(request,env,id){
+ const row=await env.DB.prepare("SELECT series,category FROM wallpapers WHERE id=? AND status='approved'").bind(id).first();
+ if(!row)return fail(request,env,404,"Wallpaper not found");
+ const related=await env.DB.prepare("SELECT * FROM wallpapers WHERE id<>? AND status='approved' ORDER BY (CASE WHEN series<>'' AND LOWER(series)=LOWER(?) THEN 20 ELSE 0 END)+(CASE WHEN category=? THEN 6 ELSE 0 END) DESC,created_at DESC LIMIT 8").bind(id,row.series,row.category).all();
+ return reply(request,env,{items:(related.results||[]).map(fields)});
+}
+
 export default {
  async fetch(request,env){
   const url=new URL(request.url),path=url.pathname.replace(/\/+$/,"")||"/";
@@ -324,9 +461,22 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:7});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:8});
    if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
+   const detail=/^\/api\/wallpapers\/([\da-f-]{36})$/.exec(path);
+   if(detail&&request.method==="GET")return publicWallpaperDetails(request,env,detail[1]);
+   const related=/^\/api\/wallpapers\/([\da-f-]{36})\/related$/.exec(path);
+   if(related&&request.method==="GET")return publicRelated(request,env,related[1]);
+   if(path==="/api/community/status"&&request.method==="GET")return communityStatus(request,env);
+   if(path==="/api/community/messages"&&request.method==="GET")return communityMessages(request,env);
+   if(path==="/api/community/messages"&&request.method==="POST")return postCommunityMessage(request,env);
+   const report=/^\/api\/community\/messages\/([\da-f-]{36})\/report$/.exec(path);
+   if(report&&request.method==="POST")return reportCommunityMessage(request,env,report[1]);
+   if(path==="/api/community/polls"&&request.method==="GET")return listCommunityPolls(request,env);
+   const vote=/^\/api\/community\/polls\/([\da-f-]{36})\/vote$/.exec(path);
+   if(vote&&request.method==="POST")return voteCommunityPoll(request,env,vote[1]);
+
    const pic=/^\/api\/wallpapers\/([\da-f-]{36})\/(original|thumb)$/.exec(path);
    if(pic&&["GET","HEAD"].includes(request.method))return getImage(request,env,pic[1],pic[2]);
    if(path.startsWith("/api/admin/")){
@@ -336,6 +486,14 @@ export default {
     if(path==="/api/admin/logout"&&request.method==="POST")return logoutAdmin(request,env);
     if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true,expiresInMinutes:30});
     if(path==="/api/admin/analyze"&&request.method==="POST")return analyzeImage(request,env);
+    if(path==="/api/admin/community/settings"&&["GET","POST"].includes(request.method))return adminCommunitySettings(request,env);
+    if(path==="/api/admin/community/messages"&&request.method==="GET")return adminChatList(request,env);
+    if(path==="/api/admin/community/polls"&&request.method==="POST")return createCommunityPoll(request,env);
+    const moderation=/^\/api\/admin\/community\/messages\/([\da-f-]{36})$/.exec(path);
+    if(moderation&&request.method==="POST")return adminChatModerate(request,env,moderation[1]);
+    const pollAdmin=/^\/api\/admin\/community\/polls\/([\da-f-]{36})$/.exec(path);
+    if(pollAdmin&&request.method==="POST")return setCommunityPoll(request,env,pollAdmin[1]);
+
     const adminPic=/^\/api\/admin\/wallpapers\/([\da-f-]{36})\/(thumb|original)$/.exec(path);
     if(adminPic&&["GET","HEAD"].includes(request.method))return getImage(request,env,adminPic[1],adminPic[2],true);
     if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);

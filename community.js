@@ -4,6 +4,7 @@ const CATS={"anime":"Anime","manga":"Manga & comics","gaming":"Games","oled":"OL
 const FAV_KEY='waifu-wallpapers-public-favorites';
 const favoritesPage=/\/library\.html$/.test(location.pathname);
 let api='',items=[],page=null,busy=false,selected=null,onlyFavorites=favoritesPage,favorites={};
+let modalSequence=[],viewerIndex=0,loadingShared=false,swipeStart=null,requestSeq=0;
 try{favorites=JSON.parse(localStorage.getItem(FAV_KEY)||'{}')||{};}catch(_){favorites={};}
 function saveFavorites(){try{localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}catch(_){}}
 function favorite(item){
@@ -34,9 +35,10 @@ function buildCard(item){
  details.append(title,sub);card.append(box,details);
  card.addEventListener('click',()=>openDetail(item));return card;
 }
+function visibleItems(){return onlyFavorites?Object.values(favorites):items;}
 function render(){
  const grid=$('publicGrid');grid.replaceChildren();
- let data=onlyFavorites?Object.values(favorites):items;
+ let data=visibleItems();
  for(const item of data)if(item&&item.id&&/^[0-9a-f-]{36}$/i.test(item.id))grid.append(buildCard(item));
  const has=grid.children.length>0;
  $('publicEmpty').hidden=has;
@@ -44,18 +46,20 @@ function render(){
  $('loadMore').hidden=onlyFavorites||page===null;
  $('publicFavorites').classList.toggle('active',onlyFavorites);
 }
-function parameters(n){const q=new URLSearchParams({limit:'24',page:String(n)});const search=$('publicSearch').value.trim(),cat=$('publicCategory').value,tag=$('publicTag').value.trim();if(search)q.set('q',search);if(cat)q.set('category',cat);if(tag)q.set('tag',tag);return q.toString();}
+function parameters(n){const q=new URLSearchParams({limit:'24',page:String(n)});const search=$('publicSearch').value.trim(),cat=$('publicCategory').value,tag=$('publicTag').value.trim(),orient=$('publicOrient').value;if(search)q.set('q',search);if(cat)q.set('category',cat);if(tag)q.set('tag',tag);if(orient)q.set('orientation',orient);return q.toString();}
 async function load(reset=false){
  if(!api)return;
  if(reset){items=[];page=0;}
  const next=page;
  if(next===null)return;
+ const seq=++requestSeq;
  const button=$('loadMore');button.disabled=true;
  try{
   const response=await fetch(api+'/api/gallery?'+parameters(next),{cache:'no-store'});
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.error||'API returned '+response.status);
   if(!Array.isArray(result.items))throw new Error('Invalid gallery response');
+  if(seq!==requestSeq)return;
   const known=new Set(items.map(x=>x.id));
   for(const item of result.items)if(!known.has(item.id)){items.push(item);known.add(item.id);}
   page=result.nextPage===null?null:result.nextPage;
@@ -63,8 +67,63 @@ async function load(reset=false){
  }catch(e){info('Public gallery unavailable: '+e.message,true);page=null;}
  finally{button.disabled=false;button.textContent='Load more wallpapers ↓';render();}
 }
+function relatedRank(x,chosen){
+ if(!x||x.id===chosen.id)return -1000;
+ const ax=new Set((chosen.tags||[]).map(t=>String(t).trim().toLowerCase()).filter(Boolean));
+ const overlap=(x.tags||[]).filter(t=>ax.has(String(t).trim().toLowerCase())).length;
+ return (chosen.series&&x.series&&chosen.series.toLowerCase()===x.series.toLowerCase()?12:0)
+    +(chosen.category===x.category?5:0)+overlap*2
+    +(Math.abs((x.width/x.height)-(chosen.width/chosen.height))<0.3?1:0);
+}
+function renderRelated(item){
+ const target=$('viewerRelated');target.replaceChildren();
+ const relevant=[...items,...Object.values(favorites)].filter((x,i,arr)=>x?.id&&arr.findIndex(y=>y?.id===x.id)===i&&x.id!==item.id)
+  .sort((a,b)=>relatedRank(b,item)-relatedRank(a,item)).slice(0,6);
+ for(const x of relevant){
+  const btn=document.createElement('button');btn.type='button';btn.className='related-tile';
+  const img=document.createElement('img');img.alt=x.title;img.loading='lazy';img.src=src(x.id);
+  const title=document.createElement('span');title.textContent=x.title;
+  btn.append(img,title);btn.addEventListener('click',()=>openDetail(x));target.append(btn);
+ }
+ target.parentElement.hidden=!relevant.length;
+}
+function navigateViewer(delta){
+ if(!selected)return;
+ modalSequence=visibleItems().filter(x=>x?.id);
+ if(modalSequence.length<2)return;
+ viewerIndex=modalSequence.findIndex(x=>x.id===selected.id);
+ if(viewerIndex<0)viewerIndex=0;
+ const next=(viewerIndex+delta+modalSequence.length)%modalSequence.length;
+ openDetail(modalSequence[next]);
+}
+function shareCurrent(){
+ if(!selected)return;
+ const url=new URL(location.href);url.searchParams.set('wallpaper',selected.id);
+ const value=url.toString();
+ if(navigator.share){navigator.share({title:selected.title,url:value}).catch(()=>{});return;}
+ if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>{$('downloadStatus').textContent='Wallpaper link copied.'}).catch(()=>{prompt('Copy wallpaper link:',value);});return;}
+ prompt('Copy wallpaper link:',value);
+}
+async function openShared(){
+ if(loadingShared||!api)return;
+ const id=new URLSearchParams(location.search).get('wallpaper');
+ if(!id||!/^[-a-f\d]{36}$/i.test(id))return;
+ loadingShared=true;
+ try{
+  let item=[...items,...Object.values(favorites)].find(x=>x?.id===id);
+  if(!item){const r=await fetch(api+'/api/wallpapers/'+encodeURIComponent(id));if(r.ok)item=await r.json();}
+  if(item)openDetail(item);
+ }catch(e){console.warn('Shared wallpaper link not available',e);}
+ finally{loadingShared=false;}
+}
 function openDetail(item){
  selected=item;
+ modalSequence=visibleItems().filter(x=>x?.id);
+ viewerIndex=modalSequence.findIndex(x=>x.id===item.id);
+ if(viewerIndex<0)viewerIndex=0;
+ $('viewerPosition').textContent=modalSequence.length>1?(viewerIndex+1)+' / '+modalSequence.length:'';
+ for(const key of ['viewerPrev','viewerNext','viewerPrevSmall','viewerNextSmall'])$(key).disabled=modalSequence.length<2;
+ renderRelated(item);
  const dialog=$('publicDetail');
  $('publicTitle').textContent=item.title;
  $('publicDetailCategory').textContent=[CATS[item.category]||'Artwork',item.series].filter(Boolean).join('  ·  ');
@@ -94,7 +153,7 @@ function openDetail(item){
  $('viewerTagsSection').hidden=tags.childElementCount===0;
  $('downloadStatus').textContent='AI enhancement runs locally in your browser. Original downloads retain full image quality.';
  updateFavoriteButton();
- dialog.showModal();
+ if(!dialog.open)dialog.showModal();
 }
 async function original(){
  if(!selected)throw new Error('No wallpaper selected');
@@ -126,11 +185,26 @@ async function init(){
  $('public4x').addEventListener('click',()=>perform('4'));
  $('publicFavorite').addEventListener('click',()=>{if(selected)favorite(selected);});
  $('publicClose').addEventListener('click',()=>$('publicDetail').close());
+ for(const [id,dir] of [['viewerPrev',-1],['viewerNext',1],['viewerPrevSmall',-1],['viewerNextSmall',1]])$(id).addEventListener('click',()=>navigateViewer(dir));
+ $('publicShare').addEventListener('click',shareCurrent);
+ $('publicRandom').addEventListener('click',()=>{const data=visibleItems().filter(x=>x?.id);if(data.length)openDetail(data[Math.floor(Math.random()*data.length)]);else location.hash='#feed';});
+ document.addEventListener('keydown',event=>{
+   if(!$('publicDetail').open||event.altKey||event.ctrlKey||event.metaKey)return;
+   if(event.target?.matches('input,textarea,select'))return;
+   if(event.key==='ArrowLeft'){event.preventDefault();navigateViewer(-1);}
+   if(event.key==='ArrowRight'){event.preventDefault();navigateViewer(1);}
+ });
+ const view=$('publicImage');
+ view.addEventListener('touchstart',event=>{swipeStart=event.touches[0]?.clientX??null;},{passive:true});
+ view.addEventListener('touchend',event=>{if(swipeStart===null)return;const end=event.changedTouches[0]?.clientX;if(typeof end==='number'&&Math.abs(end-swipeStart)>70)navigateViewer(end<swipeStart?1:-1);swipeStart=null;},{passive:true});
+
  $('publicDetail').addEventListener('click',e=>{if(e.target===$('publicDetail'))$('publicDetail').close();});
  $('publicFavorites').addEventListener('click',()=>{if(favoritesPage){location.assign('./index.html');return;}onlyFavorites=!onlyFavorites;render();});
  $('loadMore').addEventListener('click',()=>load());
  const reload=()=>{onlyFavorites=favoritesPage;load(true);};
  $('publicCategory').addEventListener('change',()=>{syncGenres();reload();});
+ $('publicOrient').addEventListener('change',reload);
+ for(const btn of document.querySelectorAll('[data-discover]'))btn.addEventListener('click',()=>{$('publicCategory').value=btn.dataset.discover;syncGenres();reload();document.getElementById('feed').scrollIntoView({behavior:'smooth'});});
  for(const btn of document.querySelectorAll('[data-publiccat]'))btn.addEventListener('click',()=>{
    $('publicCategory').value=btn.dataset.publiccat;
    syncGenres();reload();
@@ -140,7 +214,7 @@ async function init(){
  let searchTimer;for(const id of ['publicSearch','publicTag'])$(id).addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(reload,270);});
 
  if(!configured){info('Cloudflare storage has not been enabled yet. Public catalog setup is in progress.',true);page=null;render();return;}
- try{const url=new URL(configured);if(url.protocol!=='https:')throw new Error('HTTPS required');api=url.origin+url.pathname.replace(/\/+$/,'');await load(true);}
+ try{const url=new URL(configured);if(url.protocol!=='https:')throw new Error('HTTPS required');api=url.origin+url.pathname.replace(/\/+$/,'');await load(true);await openShared();}
  catch(e){info('Could not connect to storage: '+e.message,true);render();}
 }
 document.addEventListener('DOMContentLoaded',init);

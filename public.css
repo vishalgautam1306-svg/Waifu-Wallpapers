@@ -326,3 +326,22 @@ dialog.wallpaper-viewer{overflow-y:auto;scrollbar-color:#655077 #171321}
 @media(max-width:950px){.viewer-related-bottom .viewer-related-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:830px){.viewer-grid{min-height:0}.viewer-related-bottom{padding:18px}.viewer-related-bottom .related-tile img{height:105px}}
 @media(max-width:550px){.viewer-related-bottom .viewer-related-grid{grid-template-columns:repeat(2,1fr)}.viewer-related-bottom .related-tile img{height:115px}}
+
+
+/* V9 optional wallpaper-issue form; visible only after a visitor requests it */
+.viewer-report-button{display:block;width:100%;margin:9px 0 0;background:none;color:#b6a4c6;border:0;border-radius:9px;padding:9px;font:600 11px 'DM Sans',system-ui;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.viewer-report-button:hover,.viewer-report-button:focus-visible{color:#f2d6ff;background:#f4d4ff0b}
+dialog.wallpaper-report-dialog{width:min(94vw,540px);max-height:88dvh;overflow:auto;padding:0;border:1px solid #d6b8ff63;border-radius:16px;background:linear-gradient(150deg,#1d1630,#100e1c);color:#f4eaff;box-shadow:0 30px 100px #000c}
+dialog.wallpaper-report-dialog::backdrop{background:#07030bc9;backdrop-filter:blur(8px)}
+.wallpaper-report-dialog form{padding:28px;display:flex;flex-direction:column;gap:7px}
+.wallpaper-report-dialog .report-head{display:flex;gap:16px;align-items:start;justify-content:space-between;margin-bottom:8px}
+.wallpaper-report-dialog .eyebrow{font-size:10px;letter-spacing:.13em;color:#d9acf6;font-weight:800}
+.wallpaper-report-dialog h2{font:800 28px/1.15 Outfit,system-ui;letter-spacing:-.04em;margin:8px 0;color:#f4e9ff}
+.wallpaper-report-dialog .report-head button{width:40px;height:40px;flex:0 0 40px;border:1px solid #f4e7ff25;background:#ffffff12;border-radius:9px;color:#efe4ff;cursor:pointer}
+.wallpaper-report-dialog .report-art-title{font-size:12px;line-height:1.55;color:#cdb8e7;margin:0 0 12px}
+.wallpaper-report-dialog label{font-weight:700;font-size:12px;color:#e9dbf4;margin-top:9px}
+.wallpaper-report-dialog select,.wallpaper-report-dialog textarea{background:#241b39;border:1px solid #bc9fe260;border-radius:10px;padding:12px;color:#f5eeff;min-height:47px;font:12px 'DM Sans',system-ui;width:100%;resize:vertical}
+.wallpaper-report-dialog .report-hint{color:#a99db9;font-size:11px;line-height:1.65;margin:10px 0}
+.wallpaper-report-dialog #reportFeedback{font-size:11px;color:#d5bde7;line-height:1.6;min-height:20px;margin:8px 0 0}
+.wallpaper-report-dialog #reportSubmit{min-height:48px}
+@media(max-width:560px){.wallpaper-report-dialog form{padding:20px}.wallpaper-report-dialog h2{font-size:25px}}

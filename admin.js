@@ -39,9 +39,10 @@ async function jsonOrThrow(response){
  return body;
 }
 function setPanel(name){
- $('uploadPane').hidden=name!=='upload';$('managePane').hidden=name!=='manage';
- $('showUpload').classList.toggle('active',name==='upload');$('showManage').classList.toggle('active',name==='manage');
+ $('uploadPane').hidden=name!=='upload';$('managePane').hidden=name!=='manage';$('communityPane').hidden=name!=='community';
+ $('showUpload').classList.toggle('active',name==='upload');$('showManage').classList.toggle('active',name==='manage');$('showCommunity').classList.toggle('active',name==='community');
  if(name==='manage')refresh();
+ if(name==='community')loadCommunityAdmin();
 }
 function showOffline(message){$('offline').hidden=false;$('offline').textContent=message;}
 function logout(){
@@ -264,11 +265,89 @@ async function saveEdit(e){
   $('editDialog').close();refresh();
  }catch(e){$('editStatus').textContent=e.message;}
 }
+async function loadCommunityAdmin(){
+ if(!credential)return;
+ $('communityAdminStatus').textContent="Loading community settings…";
+ try{
+  const settings=await jsonOrThrow(await request('/api/admin/community/settings'));
+  $('adminChatEnabled').value=String(Boolean(settings.settings?.chat_enabled));
+  $('adminPollsEnabled').value=String(Boolean(settings.settings?.polls_enabled));
+  $('communityAdminStatus').textContent=settings.settings?.chat_enabled?'Global chat is open. Check reports regularly.':'Global chat is locked. Guests cannot post.';
+  await Promise.all([loadAdminPolls(),loadAdminMessages()]);
+ }catch(e){$('communityAdminStatus').textContent="Community tools unavailable: "+e.message;}
+}
+async function saveCommunitySettings(){
+ const chatEnabled=$('adminChatEnabled').value==='true',pollsEnabled=$('adminPollsEnabled').value==='true';
+ if(chatEnabled&&!confirm('Open public global chat? Anonymous visitors will be able to post. Monitor for spam and close the room when needed.'))return;
+ try{
+  await jsonOrThrow(await request('/api/admin/community/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chatEnabled,pollsEnabled})}));
+  $('communityAdminStatus').textContent='Settings saved. Global chat is '+(chatEnabled?'OPEN':'LOCKED')+'. Poll voting is '+(pollsEnabled?'enabled':'closed')+'.';
+ }catch(e){$('communityAdminStatus').textContent='Could not update settings: '+e.message;}
+}
+async function createPoll(event){
+ event.preventDefault();
+ const question=$('newPollQuestion').value.trim();
+ const options=$('newPollOptions').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ if(question.length<8||options.length<2||options.length>6){$('pollAdminStatus').textContent='Use a meaningful question and 2–6 unique options, each on a new line.';return;}
+ try{
+  await jsonOrThrow(await request('/api/admin/community/polls',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,options})}));
+  $('newPollQuestion').value='';$('newPollOptions').value='';
+  $('pollAdminStatus').textContent='Poll published! Visitors can now vote on the Community page.';await loadAdminPolls();
+ }catch(e){$('pollAdminStatus').textContent='Poll not published: '+e.message;}
+}
+async function loadAdminPolls(){
+ const container=$('adminPollList');container.replaceChildren();
+ try{
+  const data=await jsonOrThrow(await request('/api/community/polls'));
+  for(const poll of data.items||[]){
+   const row=node('div','moderation-item');
+   row.append(node('strong',null,poll.question),node('small',null,poll.status+' · '+poll.totalVotes+' votes · '+(poll.options||[]).join(' / ')));
+   const button=node('button','secondary',poll.status==='active'?'Close voting':'Reopen voting');
+   button.type='button';
+   button.addEventListener('click',()=>changePollState(poll.id,poll.status==='active'?'closed':'active'));
+   row.append(button);container.append(row);
+  }
+  if(!container.childElementCount)container.append(node('p',null,'No polls created yet.'));
+ }catch(e){container.append(node('p',null,'Could not load polls: '+e.message));}
+}
+async function changePollState(id,status){
+ try{
+  await jsonOrThrow(await request('/api/admin/community/polls/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}));
+  await loadAdminPolls();
+ }catch(e){$('pollAdminStatus').textContent=e.message;}
+}
+async function loadAdminMessages(){
+ const container=$('adminChatList');container.replaceChildren();
+ try{
+  const data=await jsonOrThrow(await request('/api/admin/community/messages'));
+  for(const msg of data.items||[]){
+   const row=node('div','moderation-item');
+   row.append(node('strong',null,msg.nickname+' · '+new Date(msg.createdAt).toLocaleString()));
+   row.append(node('p',null,msg.body));
+   row.append(node('small',null,msg.status+' · '+msg.reports+' report(s)'));
+   const button=node('button','secondary',msg.status==='visible'?'Hide message':'Restore message');
+   button.type='button';
+   button.addEventListener('click',()=>moderateMessage(msg.id,msg.status==='visible'?'hidden':'visible'));
+   row.append(button);container.append(row);
+  }
+  if(!container.childElementCount)container.append(node('p',null,'No chat messages yet.'));
+ }catch(e){container.append(node('p',null,'Could not load chat: '+e.message));}
+}
+async function moderateMessage(id,status){
+ try{
+  await jsonOrThrow(await request('/api/admin/community/messages/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}));
+  await loadAdminMessages();
+ }catch(e){$('communityAdminStatus').textContent=e.message;}
+}
 function bind(){
  $('loginForm').addEventListener('submit',login);
  $('logout').addEventListener('click',logout);
  $('showUpload').addEventListener('click',()=>setPanel('upload'));
  $('showManage').addEventListener('click',()=>setPanel('manage'));
+ $('showCommunity').addEventListener('click',()=>setPanel('community'));
+ $('saveCommunitySettings').addEventListener('click',saveCommunitySettings);
+ $('pollCreateForm').addEventListener('submit',createPoll);
+ $('refreshModeration').addEventListener('click',loadAdminMessages);
  $('statusFilter').addEventListener('change',refresh);
  $('refresh').addEventListener('click',refresh);
  $('files').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});

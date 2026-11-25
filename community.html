@@ -1,7 +1,60 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#100b1f"><meta name="description" content="Community for anime wallpaper fans: discuss artwork, vote on upcoming wallpapers, and explore AI upscaling.">
-<title>Community | Waifu Wallpapers</title><link rel="stylesheet" href="./community-hub.css"><script src="./community-config.js"></script><script src="./community-hub.js" defer></script></head>
+<title>Community | Waifu Wallpapers</title><style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
+:root{color-scheme:dark;--bg:#0b0816;--panel:#181126;--muted:#afa4c2;--line:#e2c8ff30;--purple:#b7a1fe;--rose:#edbff3;--heading:Outfit,system-ui,sans-serif;--body:'DM Sans',system-ui,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 85% 10%,#543a7d35,transparent 39%),#090712;color:#f8f0ff;font:13px/1.65 var(--body)}
+button,input{font:inherit}a{color:inherit;text-decoration:none}button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.topbar{max-width:1600px;height:75px;margin:auto;padding:0 5%;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line)}
+.brand{font:800 15px var(--heading);letter-spacing:.07em;color:#e9c6fc;display:flex;gap:10px;align-items:center}.brand>span{color:#eee5f6}
+.topbar nav{display:flex;align-items:center;gap:28px}.topbar nav a{font-size:12px;color:#b3a5c4;font-weight:700}.topbar nav a.active{color:#f2c9ff}.topbar nav a:hover{color:white}
+.mobile-back{font-size:11px;color:#cfb4e8;border:1px solid var(--line);border-radius:9px;padding:10px 13px;white-space:nowrap}
+main{max-width:1550px;margin:auto}.hero{position:relative;overflow:hidden;min-height:365px;padding:65px 5% 55px;background:linear-gradient(115deg,#1b1537,#261b47 65%,#1b1a3f);border-bottom:1px solid #dac6ff20;border-radius:0 0 20px 20px;isolation:isolate}
+.hero:before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 79% 39%,#c77ade5b,transparent 29%),radial-gradient(ellipse at 94% 100%,#768fd044,transparent 34%);z-index:-1}
+.hero-inner{position:relative;z-index:1;max-width:880px}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.18em;color:#d7b8fb}
+.hero h1{font:800 clamp(41px,5.1vw,72px)/1.07 var(--heading);letter-spacing:-.055em;margin:18px 0}.hero h1 em,h2 em{font-style:normal;color:#edbdf5}
+.hero p{max-width:610px;color:#c3b5d3;font-size:14px;line-height:1.8}.hero-links{display:flex;gap:11px;margin-top:25px;flex-wrap:wrap}
+.button{min-height:45px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:10px 16px;font-size:12px;font-weight:800;border:1px solid #d0aff45b;background:#261c3c;color:#f8ebff;transition:background .2s}
+.button.primary{background:linear-gradient(110deg,#edc2f6,#afa2fb);border:0;color:#23132b}.button.ghost:hover{background:#443058}
+.hero-glyph{position:absolute;right:8%;top:3%;color:#eed1ff44;font:400 240px/1 serif;transform:rotate(15deg);pointer-events:none}
+.hero-glyph span{display:block;font:500 14px var(--body);letter-spacing:.35em;position:absolute;bottom:24px;right:-30px}
+.section-pills{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:26px 5% 0}.section-pills>div{background:#1b152b;border:1px solid var(--line);border-radius:12px;padding:17px;display:grid;grid-template-columns:32px 1fr;gap:2px 10px}.section-pills span{grid-row:span 2;color:#cbadf7;font-weight:800;font-size:20px}.section-pills strong{font:700 14px var(--heading)}.section-pills small{color:var(--muted);font-size:10px}
+.workspace{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);gap:23px;padding:52px 5%}
+.section-heading{display:flex;align-items:start;justify-content:space-between;gap:15px;margin-bottom:19px}.section-heading h2{font:800 38px/1.15 var(--heading);letter-spacing:-.04em;margin:8px 0}.section-heading p{color:#afa2c0;margin:0;font-size:12px;max-width:480px}
+.status-pill{white-space:nowrap;background:#312447;color:#e5c6ff;border:1px solid #ae82d34c;border-radius:99px;padding:7px 12px;font-size:10px;font-weight:700}
+.chat-frame{background:#131020;border:1px solid #bea9e047;border-radius:13px;overflow:hidden}
+.chat-rules{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid #e0ceef1a;background:#211a31;color:#ae9ec3;font-weight:800;font-size:9px;letter-spacing:.08em}
+.chat-rules span:first-child{color:#e5beef}.chat-rules button{margin-left:auto;background:#ffffff12;color:#e6d3f8;border:1px solid #c7a6ed44;border-radius:8px;padding:5px 9px;font-size:10px;min-height:36px}
+.chat-messages{height:390px;overflow-y:auto;padding:16px;scrollbar-color:#62517a transparent;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain}
+.placeholder{margin:auto;color:#9f8caf;text-align:center;font-size:12px;max-width:360px;line-height:1.8}
+.chat-msg{background:#241c36;border:1px solid #d3bff223;border-radius:10px;padding:10px 13px;max-width:94%}
+.chat-meta{display:flex;align-items:center;gap:9px;margin-bottom:5px}.chat-meta strong{font-size:12px;color:#e6c4ff}.chat-meta time{font-size:9px;color:#9487ad}.chat-meta button{margin-left:auto;border:0;background:none;color:#a89ab4;font-size:10px;cursor:pointer;text-decoration:underline}
+.chat-msg p{font-size:12px;margin:0;color:#e8def1;overflow-wrap:anywhere;white-space:pre-wrap}
+.chat-form{display:flex;gap:8px;align-items:stretch;padding:12px;border-top:1px solid #cfbce62d;background:#1c162c}
+.chat-form input{background:#130f22;color:#fbf4ff;border:1px solid #b9a1dd50;border-radius:9px;padding:11px 13px;min-width:0;min-height:45px}
+.chat-form input::placeholder{color:#84789a}.chat-form #chatNick{width:23%;min-width:95px}.chat-form #chatMessage{flex:1}
+.chat-form button{white-space:nowrap}
+.fineprint{font-size:10px;line-height:1.7;color:#9a8bad;min-height:22px;margin:12px 0}
+.poll-list{display:grid;gap:14px}
+.poll-empty{min-height:210px;border:1px dashed #b398dc54;border-radius:13px;background:linear-gradient(155deg,#272038,#151022);padding:26px;text-align:center;display:grid;place-items:center;align-content:center;gap:10px}
+.poll-icon{color:#d5b8ff;font-size:45px;line-height:1}.poll-empty strong{font:700 20px var(--heading)}.poll-empty p{color:#a99aba;font-size:11px;max-width:270px;margin:0}
+.poll-card{background:#1c152a;border:1px solid var(--line);border-radius:12px;padding:19px}
+.poll-card .poll-kicker{font-size:9px;color:#dcbaff;font-weight:800;letter-spacing:.14em}.poll-card h3{font:700 22px/1.25 var(--heading);margin:8px 0 15px}
+.poll-option{display:flex;gap:10px;align-items:center;position:relative;overflow:hidden;width:100%;min-height:45px;background:#2a203b;border:1px solid #ac8ad044;border-radius:8px;margin-bottom:8px;color:#eee1fa;padding:9px 13px;text-align:left;cursor:pointer}
+.poll-option:hover{border-color:#e4bff7}.poll-option .option-bar{position:absolute;inset:0 auto 0 0;background:#baa1fc3b;pointer-events:none}.poll-option span:not(.option-bar){position:relative;z-index:1}.poll-option .pct{margin-left:auto;color:#dcc7ef;font-size:11px;font-weight:800}.poll-option:disabled{opacity:1;cursor:default}.poll-foot{display:flex;justify-content:space-between;gap:8px;margin-top:13px;font-size:10px;color:#9488a8}
+.submission{margin:4px 5% 55px;border:1px solid #d1ade942;background:linear-gradient(115deg,#271e3d,#151123);border-radius:17px;padding:34px;display:grid;grid-template-columns:1.4fr minmax(240px,.7fr);gap:24px}
+.submission h2{font:800 40px var(--heading);letter-spacing:-.04em;margin:9px 0}.submission p{font-size:12px;color:#b7a8c6;max-width:650px;line-height:1.8}.submission .button{margin-top:9px}
+.submission-lock{border:1px dashed #bca0e25d;border-radius:12px;padding:21px;background:#170f25;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:10px}
+.lock-icon{font-size:34px;color:#d4aaf8}.submission-lock strong{font:700 16px var(--heading)}.submission-lock span{font-size:10px;color:#9b8aaf}.submission-lock button{border:1px solid #cfaff07b;border-radius:9px;color:#dac9e2;background:#362343;padding:12px 15px;cursor:not-allowed;margin-top:10px}
+.community-note{margin:0 5% 65px;border-top:1px solid var(--line);padding-top:22px;color:#ae9fc1;font-size:11px}.community-note>div{display:flex;gap:9px;align-items:center;color:#e6cdf3}.community-note strong{font-size:12px}.community-note p{max-width:850px}
+footer{border-top:1px solid var(--line);padding:28px 5%;display:flex;justify-content:space-between;gap:14px;align-items:center;color:#9d91b2;font-size:11px}footer>a:first-child{color:#e6c1f7;font-weight:800}footer a:last-child{color:#dab6f2}
+@media(max-width:1050px){.workspace{grid-template-columns:1fr}.polls{max-width:850px}.poll-list{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}.hero-glyph{opacity:.28}.section-pills{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.topbar{padding:0 14px;height:66px}.topbar nav{gap:12px}.topbar nav a{font-size:10px}.topbar nav a[href="./library.html"]{display:none}.brand span{display:none}.mobile-back{display:none}.hero{padding:50px 19px 34px;min-height:325px}.hero h1{font-size:41px}.hero p{font-size:12px}.hero-glyph{right:-55px;font-size:160px}.section-pills{grid-template-columns:1fr;gap:7px;margin:16px 15px 0}.section-pills>div{padding:11px;grid-template-columns:26px 1fr}.section-pills span{font-size:17px}.workspace{padding:38px 15px}.section-heading h2{font-size:32px}.chat-rules{gap:7px}.chat-rules span{font-size:8px}.chat-messages{height:350px;padding:10px}.chat-form{flex-wrap:wrap}.chat-form #chatNick{width:100%}.chat-form #chatMessage{flex:1 0 55%}.submission{grid-template-columns:1fr;padding:21px;margin:5px 15px 45px}.submission h2{font-size:35px}.community-note{margin:0 15px 45px}footer{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.button{transition:none}}
+
+</style><script src="./community-config.js"></script></head>
 <body><header class="topbar"><a class="brand" href="./index.html">✦ <span>WAIFU WALLPAPERS</span></a><nav aria-label="Site sections"><a href="./index.html">Wallpapers</a><a href="./ai.html">AI Studio</a><a href="./community.html" class="active">Community</a><a href="./library.html">♡ Favorites</a></nav><a class="mobile-back" href="./index.html">Browse gallery ↗</a></header>
 <main>
 <section class="hero"><div class="hero-inner"><div class="eyebrow">✧ YOUR ANIME CORNER ON THE INTERNET</div><h1>Art brings us together.<br><em>Conversations keep us here.</em></h1><p>Talk with fellow wallpaper lovers, help decide the next character wallpaper, and discover the artwork everyone is excited about.</p><div class="hero-links"><a href="#globalChat" class="button primary">Join the conversation</a><a href="#polls" class="button ghost">Vote for what's next ↗</a></div></div><div class="hero-glyph" aria-hidden="true">✿<span>コミュニティ</span></div></section>
@@ -20,4 +73,148 @@
 </aside></div>
 <section class="submission" id="submissions"><div><div class="eyebrow">COMING LATER / 03</div><h2>Share your <em>artwork.</em></h2><p>Community wallpaper submissions are intentionally disabled while the curated catalog grows. Later, artists will be able to submit their work to a private review queue. Nothing will appear publicly without approval.</p><a href="./index.html" class="button ghost">Explore the current gallery ↗</a></div><div class="submission-lock"><div class="lock-icon">✦</div><strong>Submissions currently locked</strong><span>Admin approval will be required when enabled</span><button type="button" disabled>Community uploads · Coming later</button></div></section>
 <section class="community-note"><div><span>✧</span><strong>A welcoming space from day one.</strong></div><p>Guest nicknames are not identity verification. Moderation, rate limits and report tools help, but no anonymous chat is completely abuse-proof. Never post phone numbers, addresses, passwords or personal contact information.</p></section>
-</main><footer><a href="./index.html">✦ WAIFU WALLPAPERS</a><p>Wallpaper gallery · AI upscaler · Community</p><a href="./ai.html">Explore AI Studio ↗</a></footer></body></html>
+</main><footer><a href="./index.html">✦ WAIFU WALLPAPERS</a><p>Wallpaper gallery · AI upscaler · Community</p><a href="./ai.html">Explore AI Studio ↗</a></footer><script>
+'use strict';
+const $=id=>document.getElementById(id);
+const API=String(window.WAIFU_COMMUNITY_API||'').trim().replace(/\/+$/,'');
+const CHAT_NICK_KEY='waifu-wallpapers-chat-nickname';
+const POLL_VOTES_KEY='waifu-wallpapers-voted-polls';
+let chatEnabled=false,pollsEnabled=false,sending=false,fetchingChat=false,voting=false,pollData=[],lastMessages=[];
+let voteSet=new Set();
+try{voteSet=new Set(JSON.parse(localStorage.getItem(POLL_VOTES_KEY)||'[]'))}catch(_){}
+try{$('chatNick').value=localStorage.getItem(CHAT_NICK_KEY)||'';}catch(_){}
+function saveNick(){try{localStorage.setItem(CHAT_NICK_KEY,$('chatNick').value.trim())}catch(_){}}
+function saveVotes(){try{localStorage.setItem(POLL_VOTES_KEY,JSON.stringify([...voteSet]))}catch(_){}}
+async function request(path,opts={}){
+ const response=await fetch(API+path,{cache:'no-store',...opts});
+ let result={};try{result=await response.json()}catch(_){}
+ if(!response.ok)throw new Error(result.error||'Unable to reach community services ('+response.status+')');
+ return result;
+}
+function p(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
+function humanDate(timestamp){
+ const date=new Date(Number(timestamp)||Date.now());
+ return date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
+function setChat(enabled,label){
+ chatEnabled=Boolean(enabled);
+ $('chatState').textContent=label||(enabled?'● Room open':'Room closed');
+ $('chatNick').disabled=!enabled;$('chatMessage').disabled=!enabled;$('sendChat').disabled=!enabled||sending;
+ $('chatMessage').placeholder=enabled?'Say something about anime…':'Chat is currently closed for moderation setup';
+}
+function renderMessages(data){
+ const list=$('chatMessages');const bottom=list.scrollHeight-list.scrollTop-list.clientHeight<100;
+ list.replaceChildren();
+ if(!data.length){
+  list.append(p('div','placeholder',chatEnabled?'No messages yet. Start the conversation!':'The global chat will open after moderation testing.'));
+ }else{
+  for(const msg of data){
+   const box=p('div','chat-msg');
+   const meta=p('div','chat-meta');
+   const who=p('strong',null,msg.nickname||'Guest');
+   const when=p('time',null,humanDate(msg.createdAt));when.dateTime=new Date(msg.createdAt).toISOString();
+   const report=p('button',null,'Report');report.type='button';report.title='Report this message to site moderation';
+   report.addEventListener('click',()=>reportMessage(msg.id,report));
+   meta.append(who,when,report);
+   const body=p('p',null,msg.body||'');
+   box.append(meta,body);list.append(box);
+  }
+ }
+ if(bottom)list.scrollTop=list.scrollHeight;
+}
+async function loadChat(){
+ if(fetchingChat||!chatEnabled||!API||document.hidden)return;
+ fetchingChat=true;
+ try{
+  const data=await request('/api/community/messages?limit=60');
+  const newMessages=Array.isArray(data.items)?data.items:[];
+  if(JSON.stringify(newMessages.map(x=>[x.id,x.body]))!==JSON.stringify(lastMessages.map(x=>[x.id,x.body]))){
+   lastMessages=newMessages;renderMessages(lastMessages);
+  }
+ }catch(e){$('chatFeedback').textContent=e.message}
+ finally{fetchingChat=false;}
+}
+async function sendChat(event){
+ event.preventDefault();if(!chatEnabled||sending)return;
+ const nickname=$('chatNick').value.trim().replace(/\s+/g,' ').slice(0,24);
+ const body=$('chatMessage').value.trim().slice(0,240);
+ if(nickname.length<2||body.length<2){$('chatFeedback').textContent='Enter a nickname and a message of at least two characters.';return;}
+ sending=true;$('sendChat').disabled=true;$('chatFeedback').textContent='Sending…';
+ try{
+  saveNick();
+  await request('/api/community/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname,body})});
+  $('chatMessage').value='';$('chatFeedback').textContent='Message sent. Be respectful and protect your privacy.';
+  await loadChat();
+ }catch(e){$('chatFeedback').textContent=e.message;}
+ finally{sending=false;$('sendChat').disabled=!chatEnabled;}
+}
+async function reportMessage(id,button){
+ if(!confirm('Report this message for moderator review?'))return;
+ button.disabled=true;
+ try{await request('/api/community/messages/'+encodeURIComponent(id)+'/report',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});$('chatFeedback').textContent='Report received for admin review.'}
+ catch(e){$('chatFeedback').textContent=e.message;button.disabled=false;}
+}
+function renderPolls(){
+ const root=$('pollList');root.replaceChildren();
+ if(!pollData.length){
+  const empty=p('div','poll-empty');empty.append(p('div','poll-icon','◇'),p('strong',null,'No active polls yet'),p('p',null,'The owner will post character and theme polls here. You can browse wallpapers meanwhile.'));
+  root.append(empty);return;
+ }
+ for(const poll of pollData){
+  const voted=voteSet.has(poll.id),closed=poll.status!=='active'||!pollsEnabled;
+  const total=Number(poll.totalVotes)||0;
+  const card=p('article','poll-card');card.append(p('div','poll-kicker',closed?'POLL CLOSED':'COMMUNITY CHOICE'),p('h3',null,poll.question||'Untitled poll'));
+  for(let i=0;i<(poll.options||[]).length;i++){
+   const option=p('button','poll-option');option.type='button';option.disabled=voted||closed||voting;
+   const num=Number(poll.counts?.[i]||0),percentage=total?Math.round(num/total*100):0;
+   if(voted||closed){
+    const bar=p('span','option-bar');bar.style.width=percentage+'%';option.append(bar);
+   }
+   option.append(p('span',null,poll.options[i]));
+   if(voted||closed)option.append(p('span','pct',percentage+'%'));
+   else option.addEventListener('click',()=>votePoll(poll.id,i));
+   card.append(option);
+  }
+  const foot=p('div','poll-foot');foot.append(p('span',null,total+' votes'),p('span',null,voted?'Thank you for voting ♥':closed?'Voting closed':'Choose one option'));
+  card.append(foot);root.append(card);
+ }
+}
+async function loadPolls(){
+ if(!API)return;
+ try{const data=await request('/api/community/polls');pollData=Array.isArray(data.items)?data.items:[];renderPolls();}
+ catch(e){$('pollFeedback').textContent=e.message;pollData=[];renderPolls();}
+}
+async function votePoll(id,index){
+ if(voting||voteSet.has(id))return;
+ if(!confirm('Vote for this wallpaper request? You can vote once per poll.'))return;
+ voting=true;renderPolls();
+ try{
+  await request('/api/community/polls/'+encodeURIComponent(id)+'/vote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({option:index})});
+  voteSet.add(id);saveVotes();$('pollFeedback').textContent='Vote counted! Thanks for helping choose upcoming wallpapers.';
+  await loadPolls();
+ }catch(e){$('pollFeedback').textContent=e.message;}
+ finally{voting=false;renderPolls();}
+}
+async function init(){
+ $('chatForm').addEventListener('submit',sendChat);
+ $('chatNick').addEventListener('change',saveNick);
+ $('refreshChat').addEventListener('click',()=>{loadChat();loadPolls();});
+ setChat(false,'Checking chat…');
+ if(!API){setChat(false,'Room unavailable');renderMessages([]);renderPolls();$('pollFeedback').textContent='Community services are not configured.';return;}
+ try{
+  const status=await request('/api/community/status');
+  pollsEnabled=Boolean(status.pollsEnabled);
+  setChat(Boolean(status.chatEnabled),status.chatEnabled?'● Room open':'● Chat beta · Locked');
+  if(chatEnabled)await loadChat();else renderMessages([]);
+  await loadPolls();
+  if(!chatEnabled)$('chatFeedback').textContent='Chat is intentionally locked until the owner finishes spam and moderation testing. Guests will not need accounts when it opens.';
+ }catch(e){
+  setChat(false,'Room unavailable');renderMessages([]);renderPolls();
+  $('chatFeedback').textContent='Community server features are being prepared: '+e.message;
+  $('pollFeedback').textContent='Polls will appear once the Community backend is deployed.';
+ }
+ setInterval(()=>{if(!document.hidden&&chatEnabled)loadChat();},12000);
+ setInterval(()=>{if(!document.hidden)loadPolls();},60000);
+}
+document.addEventListener('DOMContentLoaded',init);
+</script></body></html>

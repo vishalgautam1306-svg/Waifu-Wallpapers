@@ -85,6 +85,7 @@
           <div class="viewer-ai-heading"><span aria-hidden="true">✦</span> ENHANCE WITH AI <span class="viewer-ai-note">On your device</span></div>
           <div class="viewer-ai-row"><button type="button" id="public2x"><span>2× AI</span><small>Sharper details</small></button><button type="button" id="public4x"><span>4× AI</span><small>Ultra high resolution</small></button></div>
           <button type="button" class="viewer-favorite" id="publicFavorite">♡ Save to favorites</button>
+          <button type="button" class="viewer-report-button" id="publicReport">⚑ Report incorrect details or an issue</button>
           <p id="downloadStatus" class="viewer-status" role="status" aria-live="polite">AI enhancement runs locally in your browser.</p>
         </div>
         <div class="viewer-nextline"><button type="button" id="viewerPrevSmall">‹ Previous</button><span id="viewerPosition" aria-live="polite"></span><button type="button" id="viewerNextSmall">Next ›</button></div><div id="viewerTagsSection" class="viewer-tags-section" hidden><div class="viewer-tags-heading">DISCOVER MORE</div><div id="publicTags" class="viewer-tags"></div></div>
@@ -95,6 +96,26 @@
       <div class="viewer-related-grid" id="viewerRelated"></div>
     </section>
   </div>
+</dialog>
+<dialog id="reportDialog" class="wallpaper-report-dialog" aria-labelledby="reportHeading">
+  <form id="reportForm">
+    <div class="report-head"><div><div class="eyebrow">HELP IMPROVE THE CATALOG</div><h2 id="reportHeading">Report a wallpaper issue</h2></div><button type="button" id="reportClose" aria-label="Close report form">✕</button></div>
+    <p id="reportArtTitle" class="report-art-title"></p>
+    <label for="reportReason">What's the problem?</label>
+    <select id="reportReason" required>
+      <option value="">Choose a reason</option>
+      <option value="wrong_details">Incorrect title or anime/game series</option>
+      <option value="wrong_tags">Wrong category or tags</option>
+      <option value="broken_image">Broken image or download</option>
+      <option value="copyright">Ownership or copyright concern</option>
+      <option value="other">Other issue</option>
+    </select>
+    <label for="reportNote">More details (optional)</label>
+    <textarea id="reportNote" maxlength="300" rows="3" placeholder="Example: This is Akaza, not Rengoku. Please avoid personal/contact information."></textarea>
+    <p class="report-hint">Reports go privately to the site owner. No login required; limited to prevent spam.</p>
+    <button type="submit" id="reportSubmit" class="viewer-download-primary">Send report</button>
+    <p id="reportFeedback" role="status" aria-live="polite"></p>
+  </form>
 </dialog>
 </body>
 </html>

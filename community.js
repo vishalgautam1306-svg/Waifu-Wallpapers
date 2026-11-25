@@ -111,8 +111,12 @@ function shareCurrent(){
  if(!selected)return;
  const url=new URL(location.href);url.searchParams.set('wallpaper',selected.id);
  const value=url.toString();
- if(navigator.share){navigator.share({title:selected.title,url:value}).catch(()=>{});return;}
- if(navigator.clipboard?.writeText){navigator.clipboard.writeText(value).then(()=>{$('downloadStatus').textContent='Wallpaper link copied.'}).catch(()=>{prompt('Copy wallpaper link:',value);});return;}
+ if(navigator.clipboard?.writeText){
+  navigator.clipboard.writeText(value).then(()=>{$('downloadStatus').textContent='Wallpaper link copied. Paste it into Owner Studio search to edit this exact artwork.'})
+   .catch(()=>{if(navigator.share)navigator.share({title:selected.title,url:value}).catch(()=>prompt('Copy wallpaper link:',value));else prompt('Copy wallpaper link:',value);});
+  return;
+ }
+ if(navigator.share){navigator.share({title:selected.title,url:value}).catch(()=>prompt('Copy wallpaper link:',value));return;}
  prompt('Copy wallpaper link:',value);
 }
 async function openShared(){

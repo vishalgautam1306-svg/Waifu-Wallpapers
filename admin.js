@@ -14,6 +14,7 @@ const SERIES=[
 ];
 let api='',credential='',queue=[],visible=[],adminItems=[],uploading=false,cancel=false,editing=null;
 let sessionExpiry=0,scanning=false;
+let catalogPage=0,catalogNext=null,reportsPage=0,reportsNext=null,adminSearchTerm='',adminStatus='draft';
 const urls=[];
 function blobUrl(blob){const url=URL.createObjectURL(blob);urls.push(url);return url;}
 function clearUrls(){for(const url of urls)URL.revokeObjectURL(url);urls.length=0;}
@@ -39,10 +40,11 @@ async function jsonOrThrow(response){
  return body;
 }
 function setPanel(name){
- $('uploadPane').hidden=name!=='upload';$('managePane').hidden=name!=='manage';$('communityPane').hidden=name!=='community';
- $('showUpload').classList.toggle('active',name==='upload');$('showManage').classList.toggle('active',name==='manage');$('showCommunity').classList.toggle('active',name==='community');
+ $('uploadPane').hidden=name!=='upload';$('managePane').hidden=name!=='manage';$('communityPane').hidden=name!=='community';$('reportsPane').hidden=name!=='reports';
+ $('showUpload').classList.toggle('active',name==='upload');$('showManage').classList.toggle('active',name==='manage');$('showCommunity').classList.toggle('active',name==='community');$('showReports').classList.toggle('active',name==='reports');
  if(name==='manage')refresh();
  if(name==='community')loadCommunityAdmin();
+ if(name==='reports')refreshReports();
 }
 function showOffline(message){$('offline').hidden=false;$('offline').textContent=message;}
 function logout(){
@@ -66,7 +68,9 @@ async function login(ev){
   credential=result.session;sessionExpiry=result.expiresAt;
   $('login').hidden=true;$('workspace').hidden=false;
   $('secret').value='';$('loginState').textContent='';
-  setPanel('upload');
+  const deep=new URLSearchParams(location.search).get('wallpaper');
+  if(deep){setPanel('manage');$('adminSearch').value=deep;await findCatalogWallpaper();}
+  else setPanel('upload');
  }catch(e){credential='';sessionExpiry=0;$('loginState').textContent=e.message;}
 }
 function node(tag,cls,label){
@@ -221,25 +225,107 @@ async function preview(id,img){
   img.src=blobUrl(await res.blob());
  }catch(_){img.alt='Preview unavailable';}
 }
+function normalizeLookup(value){
+ const raw=String(value||"").trim();
+ const uuid=raw.match(/[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}/i);
+ return uuid?uuid[0].toLowerCase():raw.slice(0,140);
+}
+function updateCatalogPagination(){
+ $('adminPageCount').textContent='Page '+(catalogPage+1);
+ $('adminPrev').disabled=catalogPage<=0;
+ $('adminNext').disabled=catalogNext===null;
+}
 async function refresh(){
  if(!credential)return;
- $('manageStatus').textContent='Loading catalog…';const list=$('manageList');list.replaceChildren();clearUrls();
+ $('manageStatus').textContent='Searching your catalog…';
+ const list=$('manageList');list.replaceChildren();
+ const p=new URLSearchParams({status:adminStatus,page:String(catalogPage)});
+ if(adminSearchTerm)p.set('q',adminSearchTerm);
  try{
-  const data=await jsonOrThrow(await request('/api/admin/list?status='+encodeURIComponent($('statusFilter').value)));
-  adminItems=data.items||[];
-  $('manageStatus').textContent=adminItems.length+' wallpapers in this view.';
+  const data=await jsonOrThrow(await request('/api/admin/list?'+p));
+  adminItems=data.items||[];catalogNext=data.nextPage;
+  $('manageStatus').textContent=adminItems.length
+    ?'Showing '+adminItems.length+' wallpapers on page '+(catalogPage+1)+(adminSearchTerm?' for "'+adminSearchTerm+'"':'')+'.'
+    :'No matches. Try another title, series, tag, or paste the full wallpaper link.';
   for(const item of adminItems){
-   const row=node('div','manage-item');const img=document.createElement('img');img.alt='Private preview for '+item.title;
+   const row=node('div','manage-item');
+   const img=document.createElement('img');img.alt='Private preview of '+item.title;
    preview(item.id,img);
-   const meta=node('div','meta');meta.append(node('strong',null,item.title),node('small',null,(item.series||'No series')+' · '+item.category+' · '+item.status));
+   const meta=node('div','meta');
+   meta.append(node('strong',null,item.title),
+    node('small',null,(item.series||'No series')+' · '+item.category+' · '+item.status),
+    node('small',null,'ID '+item.id));
    const actions=node('div','manage-actions');
-   const edit=node('button','secondary','Edit');edit.addEventListener('click',()=>openEdit(item));
+   const edit=node('button','secondary','✎ Edit details');edit.type='button';edit.addEventListener('click',()=>openEdit(item));
    const publish=node('button','primary',item.status==='approved'?'Unpublish':'Publish');
-   publish.addEventListener('click',()=>changeStatus(item,item.status==='approved'?'draft':'approved'));
-   const remove=node('button','secondary','Remove');remove.addEventListener('click',()=>changeStatus(item,'removed'));
+   publish.type='button';publish.addEventListener('click',()=>changeStatus(item,item.status==='approved'?'draft':'approved'));
+   const remove=node('button','secondary','Remove');remove.type='button';remove.addEventListener('click',()=>changeStatus(item,'removed'));
    actions.append(edit,publish,remove);row.append(img,meta,actions);list.append(row);
   }
- }catch(e){$('manageStatus').textContent=e.message;}
+  updateCatalogPagination();
+ }catch(e){$('manageStatus').textContent='Cannot search catalog: '+e.message;catalogNext=null;updateCatalogPagination();}
+}
+async function findCatalogWallpaper(){
+ const raw=$('adminSearch').value.trim();
+ adminSearchTerm=normalizeLookup(raw);
+ $('statusFilter').value='all';adminStatus='all';catalogPage=0;
+ await refresh();
+ // For an exact public URL or UUID, open the correct record without searching pages.
+ if(/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(adminSearchTerm)){
+  try{
+   const result=await jsonOrThrow(await request('/api/admin/wallpapers/'+adminSearchTerm));
+   if(result.item)openEdit(result.item);
+  }catch(e){$('manageStatus').textContent='Could not open exact wallpaper: '+e.message;}
+ }
+}
+function clearCatalogSearch(){
+ $('adminSearch').value='';adminSearchTerm='';catalogPage=0;
+ $('statusFilter').value='all';adminStatus='all';refresh();
+}
+async function refreshReports(){
+ if(!credential)return;
+ const list=$('reportsList');list.replaceChildren();
+ $('reportsFeedback').textContent='Loading reports…';
+ const params=new URLSearchParams({status:$('reportsStatus').value,page:String(reportsPage)});
+ try{
+  const result=await jsonOrThrow(await request('/api/admin/reports?'+params));
+  reportsNext=result.nextPage;
+  const reports=result.items||[];
+  $('reportsFeedback').textContent=reports.length?reports.length+' reports on this page.':'No reports in this view.';
+  for(const report of reports){
+   const row=node('article','report-item');
+   const header=node('div','report-item-head');
+   header.append(node('strong',null,report.title),node('small',null,new Date(report.createdAt).toLocaleString()));
+   const reasonMap={wrong_details:'Wrong title / anime',wrong_tags:'Wrong category / tags',broken_image:'Broken download / image',copyright:'Copyright / ownership',other:'Other'};
+   const desc=node('p',null,(reasonMap[report.reason]||report.reason)+(report.note?' — '+report.note:''));
+   const status=node('small',null,'Report '+report.status+' · Artwork '+report.wallpaperId);
+   const actions=node('div','manage-actions');
+   const edit=node('button','primary','✎ Open exact wallpaper');
+   edit.type='button';edit.addEventListener('click',()=>openReportArtwork(report.wallpaperId));
+   const link=document.createElement('a');link.href='./index.html?wallpaper='+encodeURIComponent(report.wallpaperId);
+   link.target='_blank';link.rel='noopener noreferrer';link.className='secondary';link.textContent='View public page';
+   const resolve=node('button','secondary','✓ Resolved');resolve.type='button';resolve.disabled=report.status==='resolved';
+   resolve.addEventListener('click',()=>updateReportStatus(report.id,'resolved'));
+   const dismiss=node('button','secondary','Dismiss');dismiss.type='button';dismiss.disabled=report.status==='dismissed';
+   dismiss.addEventListener('click',()=>updateReportStatus(report.id,'dismissed'));
+   actions.append(edit,link,resolve,dismiss);
+   row.append(header,desc,status,actions);list.append(row);
+  }
+  $('reportsPageCount').textContent='Page '+(reportsPage+1);
+  $('reportsPrev').disabled=reportsPage===0;$('reportsNext').disabled=reportsNext===null;
+ }catch(e){$('reportsFeedback').textContent='Reports unavailable: '+e.message;reportsNext=null;$('reportsNext').disabled=true;}
+}
+async function openReportArtwork(id){
+ try{
+  const data=await jsonOrThrow(await request('/api/admin/wallpapers/'+encodeURIComponent(id)));
+  if(data.item)openEdit(data.item);
+ }catch(e){$('reportsFeedback').textContent='Cannot open wallpaper: '+e.message;}
+}
+async function updateReportStatus(id,status){
+ try{
+  await jsonOrThrow(await request('/api/admin/reports/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}));
+  await refreshReports();
+ }catch(e){$('reportsFeedback').textContent='Could not update report: '+e.message;}
 }
 async function changeStatus(item,status){
  if(status==='removed'&&!confirm('Unpublish and mark "'+item.title+'" as removed?'))return;
@@ -254,6 +340,7 @@ function openEdit(item){
  $('editTitle').value=item.title||'';$('editSeries').value=item.series||'';
  $('editDescription').value=item.description||'';$('editTags').value=(item.tags||[]).join(', ');
  $('editCategory').value=item.category||'other';$('editStatus').textContent='';
+ $('editArtworkId').textContent='Wallpaper ID: '+item.id;
  preview(item.id,$('editPreview'));dialog.showModal();
 }
 async function saveEdit(e){
@@ -344,11 +431,26 @@ function bind(){
  $('logout').addEventListener('click',logout);
  $('showUpload').addEventListener('click',()=>setPanel('upload'));
  $('showManage').addEventListener('click',()=>setPanel('manage'));
+ $('showReports').addEventListener('click',()=>setPanel('reports'));
+ $('adminSearchForm').addEventListener('submit',e=>{e.preventDefault();findCatalogWallpaper();});
+ $('clearAdminSearch').addEventListener('click',clearCatalogSearch);
+ $('adminPrev').addEventListener('click',()=>{if(catalogPage>0){catalogPage--;refresh();}});
+ $('adminNext').addEventListener('click',()=>{if(catalogNext!==null){catalogPage=catalogNext;refresh();}});
+ $('reportsStatus').addEventListener('change',()=>{reportsPage=0;refreshReports();});
+ $('refreshReports').addEventListener('click',refreshReports);
+ $('reportsPrev').addEventListener('click',()=>{if(reportsPage>0){reportsPage--;refreshReports();}});
+ $('reportsNext').addEventListener('click',()=>{if(reportsNext!==null){reportsPage=reportsNext;refreshReports();}});
+ $('copyArtworkLink').addEventListener('click',()=>{
+   if(!editing)return;
+   const url=new URL('./index.html?wallpaper='+encodeURIComponent(editing.id),location.href).href;
+   if(navigator.clipboard?.writeText)navigator.clipboard.writeText(url).then(()=>{$('editStatus').textContent='Public wallpaper link copied.'}).catch(()=>prompt('Copy this link:',url));
+   else prompt('Copy this link:',url);
+ });
  $('showCommunity').addEventListener('click',()=>setPanel('community'));
  $('saveCommunitySettings').addEventListener('click',saveCommunitySettings);
  $('pollCreateForm').addEventListener('submit',createPoll);
  $('refreshModeration').addEventListener('click',loadAdminMessages);
- $('statusFilter').addEventListener('change',refresh);
+ $('statusFilter').addEventListener('change',()=>{adminStatus=$('statusFilter').value;catalogPage=0;refresh();});
  $('refresh').addEventListener('click',refresh);
  $('files').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});
  $('folder').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});

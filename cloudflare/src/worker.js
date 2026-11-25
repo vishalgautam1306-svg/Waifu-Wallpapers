@@ -246,11 +246,25 @@ async function listPublic(request,env){
  return reply(request,env,{items:rows.slice(0,limit).map(fields),page,nextPage:rows.length>limit?page+1:null});
 }
 async function listAdmin(request,env){
- const status=new URL(request.url).searchParams.get("status")||"draft";
+ const params=new URL(request.url).searchParams;
+ const status=params.get("status")||"draft";
  const valid=["draft","approved","removed","all"].includes(status)?status:"draft";
- const sql=valid==="all"?"SELECT * FROM wallpapers ORDER BY created_at DESC LIMIT 150":"SELECT * FROM wallpapers WHERE status=? ORDER BY created_at DESC LIMIT 150";
- const r=valid==="all"?await env.DB.prepare(sql).all():await env.DB.prepare(sql).bind(valid).all();
- return reply(request,env,{items:(r.results||[]).map(fields)});
+ const query=text(params.get("q"),140);
+ const page=Math.min(10000,Math.max(0,Math.floor(Number(params.get("page"))||0)));
+ const limit=30;
+ const conditions=[],bindings=[];
+ if(valid!=="all"){conditions.push("status=?");bindings.push(valid);}
+ const idMatch=query.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i);
+ if(idMatch){conditions.push("id=?");bindings.push(idMatch[0].toLowerCase());}
+ else if(query){conditions.push("(LOWER(title) LIKE ? OR LOWER(series) LIKE ? OR LOWER(category) LIKE ? OR LOWER(description) LIKE ? OR LOWER(tags_json) LIKE ?)");for(let i=0;i<5;i++)bindings.push("%"+query.toLowerCase()+"%");}
+ const where=conditions.length?" WHERE "+conditions.join(" AND "):"";
+ const data=await env.DB.prepare("SELECT * FROM wallpapers"+where+" ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?").bind(...bindings,limit+1,page*limit).all();
+ const rows=data.results||[];
+ return reply(request,env,{items:rows.slice(0,limit).map(fields),page,nextPage:rows.length>limit?page+1:null,limit});
+}
+async function adminWallpaperById(request,env,id){
+ const row=await env.DB.prepare("SELECT * FROM wallpapers WHERE id=?").bind(id).first();
+ return row?reply(request,env,{item:fields(row)}):fail(request,env,404,"Wallpaper not found");
 }
 async function getImage(request,env,id,kind,admin=false){
  const row=await env.DB.prepare("SELECT status,original_key,thumb_key,mime FROM wallpapers WHERE id=?").bind(id).first();
@@ -453,6 +467,46 @@ async function publicRelated(request,env,id){
  return reply(request,env,{items:(related.results||[]).map(fields)});
 }
 
+
+// V9 lightweight visitor correction reporting. No user uploads, AI or paid moderation.
+const WALLPAPER_REPORT_REASONS=new Set(["wrong_details","wrong_tags","broken_image","copyright","other"]);
+async function reportWallpaper(request,env,id){
+ if(!validCommunityOrigin(request,env))return fail(request,env,403,"Reports must come from the gallery website.");
+ if(!(request.headers.get("Content-Type")||"").startsWith("application/json"))return fail(request,env,415,"JSON required");
+ if(Number(request.headers.get("Content-Length")||0)>1100)return fail(request,env,413,"Report is too long");
+ const row=await env.DB.prepare("SELECT id FROM wallpapers WHERE id=? AND status='approved'").bind(id).first();
+ if(!row)return fail(request,env,404,"Wallpaper not found");
+ const body=await request.json().catch(()=>null);
+ if(!WALLPAPER_REPORT_REASONS.has(body?.reason))return fail(request,env,400,"Select a valid report reason");
+ const note=text(body?.note||"",300);
+ if(/https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}/i.test(note))return fail(request,env,400,"Please do not include links or contact information");
+ const fp=await fingerprints(request,env),now=Date.now();
+ const recent=await env.DB.prepare("SELECT COUNT(*) AS n FROM wallpaper_reports WHERE reporter_hash=? AND created_at>?").bind(fp.ip,now-86400000).first();
+ if((recent?.n||0)>=5)return fail(request,env,429,"Daily report limit reached");
+ const idNew=crypto.randomUUID();
+ const result=await env.DB.prepare("INSERT OR IGNORE INTO wallpaper_reports(id,wallpaper_id,reporter_hash,reason,note,status,created_at,updated_at) VALUES (?,?,?,?,?,'open',?,?)").bind(idNew,id,fp.ip,body.reason,note,now,now).run();
+ if((result.meta?.changes||0)===0)return reply(request,env,{reported:true,alreadyReported:true,message:"This wallpaper has already been reported from this connection."});
+ return reply(request,env,{reported:true,message:"Thanks. The owner can review this report."},201);
+}
+async function listWallpaperReports(request,env){
+ const params=new URL(request.url).searchParams;
+ const status=["open","resolved","dismissed","all"].includes(params.get("status"))?params.get("status"):"open";
+ const page=Math.min(10000,Math.max(0,Math.floor(Number(params.get("page"))||0)));
+ const limit=30,where=status==="all"?"":" WHERE r.status=?";
+ const binds=status==="all"?[]:[status];
+ const result=await env.DB.prepare("SELECT r.id,r.wallpaper_id,r.reason,r.note,r.status,r.created_at,r.updated_at,w.title,w.status AS wallpaper_status FROM wallpaper_reports r LEFT JOIN wallpapers w ON w.id=r.wallpaper_id"+where+" ORDER BY r.created_at DESC LIMIT ? OFFSET ?").bind(...binds,limit+1,page*limit).all();
+ const rows=result.results||[];
+ return reply(request,env,{items:rows.slice(0,limit).map(x=>({id:x.id,wallpaperId:x.wallpaper_id,title:x.title||"Deleted wallpaper",wallpaperStatus:x.wallpaper_status,reason:x.reason,note:x.note,status:x.status,createdAt:x.created_at})),page,nextPage:rows.length>limit?page+1:null,limit});
+}
+async function setWallpaperReportStatus(request,env,id){
+ const body=await request.json().catch(()=>null);
+ if(!["open","resolved","dismissed"].includes(body?.status))return fail(request,env,400,"Invalid review status");
+ const result=await env.DB.prepare("UPDATE wallpaper_reports SET status=?,updated_at=? WHERE id=?").bind(body.status,Date.now(),id).run();
+ if((result.meta?.changes||0)===0)return fail(request,env,404,"Report not found");
+ await audit(env,"wallpaper_report_"+body.status,(await fingerprints(request,env)).ip,id);
+ return reply(request,env,{status:body.status});
+}
+
 export default {
  async fetch(request,env){
   const url=new URL(request.url),path=url.pathname.replace(/\/+$/,"")||"/";
@@ -461,9 +515,11 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:8});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:9});
    if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
+   const artworkReport=/^\/api\/wallpapers\/([\da-f-]{36})\/report$/.exec(path);
+   if(artworkReport&&request.method==="POST")return reportWallpaper(request,env,artworkReport[1]);
    const detail=/^\/api\/wallpapers\/([\da-f-]{36})$/.exec(path);
    if(detail&&request.method==="GET")return publicWallpaperDetails(request,env,detail[1]);
    const related=/^\/api\/wallpapers\/([\da-f-]{36})\/related$/.exec(path);
@@ -485,6 +541,9 @@ export default {
     if(denied)return denied;
     if(path==="/api/admin/logout"&&request.method==="POST")return logoutAdmin(request,env);
     if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true,expiresInMinutes:30});
+    if(path==="/api/admin/reports"&&request.method==="GET")return listWallpaperReports(request,env);
+    const reportStatus=/^\/api\/admin\/reports\/([\da-f-]{36})$/.exec(path);
+    if(reportStatus&&request.method==="POST")return setWallpaperReportStatus(request,env,reportStatus[1]);
     if(path==="/api/admin/analyze"&&request.method==="POST")return analyzeImage(request,env);
     if(path==="/api/admin/community/settings"&&["GET","POST"].includes(request.method))return adminCommunitySettings(request,env);
     if(path==="/api/admin/community/messages"&&request.method==="GET")return adminChatList(request,env);
@@ -497,6 +556,8 @@ export default {
     const adminPic=/^\/api\/admin\/wallpapers\/([\da-f-]{36})\/(thumb|original)$/.exec(path);
     if(adminPic&&["GET","HEAD"].includes(request.method))return getImage(request,env,adminPic[1],adminPic[2],true);
     if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);
+    const wallpaperAdmin=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);
+    if(wallpaperAdmin&&request.method==="GET")return adminWallpaperById(request,env,wallpaperAdmin[1]);
     if(path==="/api/admin/upload"&&request.method==="POST")return upload(request,env);
     const editPath=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);
     if(editPath&&request.method==="PATCH")return edit(request,env,editPath[1]);

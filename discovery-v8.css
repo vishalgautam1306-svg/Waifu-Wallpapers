@@ -32,3 +32,20 @@
 @media(max-width:950px){.more-discovery{flex-direction:column;align-items:flex-start}.more-discovery-links{justify-content:flex-start}.viewer-edge {width:40px;height:52px;font-size:28px}.viewer-art-inner{padding-inline:38px}}
 @media(max-width:830px){.viewer-edge{width:38px;height:45px;border-radius:7px}.viewer-edge-left{left:4px}.viewer-edge-right{right:4px}.viewer-art-inner{padding-inline:37px}}
 @media(max-width:560px){.desktop-nav a[href="./community.html"]{display:none}.header-cta a[href="./community.html"]{display:inline-flex}.viewer-related-grid{grid-template-columns:repeat(3,1fr)}.related-tile img{height:66px}.viewer-edge{height:42px;width:31px;font-size:25px}.viewer-art-inner{padding-inline:31px}.viewer-nextline button{padding:8px 11px}.more-discovery{padding-block:25px}.more-discovery-links button,.more-discovery-links a{padding:10px 12px}}
+
+/* Let the cinematic wallpaper preview scroll into a full-width related-art section */
+dialog.wallpaper-viewer{overflow-y:auto;scrollbar-color:#655077 #171321}
+.viewer-shell{max-height:none;min-height:0}
+.viewer-toolbar{position:sticky;top:0;z-index:6}
+.viewer-grid{min-height:515px;flex:0 0 auto}
+.viewer-details{overflow:visible}
+.viewer-artwork{min-height:0}
+.viewer-related-bottom{margin:0;padding:23px 28px 28px;background:#171224;border-top:1px solid #d9b8f32b}
+.viewer-related-bottom .viewer-related-head strong{font-size:22px}
+.viewer-related-bottom .viewer-related-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.viewer-related-bottom .related-tile{padding:7px}
+.viewer-related-bottom .related-tile img{height:120px}
+.viewer-related-bottom .related-tile span{font-size:11px;padding:8px 2px}
+@media(max-width:950px){.viewer-related-bottom .viewer-related-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:830px){.viewer-grid{min-height:0}.viewer-related-bottom{padding:18px}.viewer-related-bottom .related-tile img{height:105px}}
+@media(max-width:550px){.viewer-related-bottom .viewer-related-grid{grid-template-columns:repeat(2,1fr)}.viewer-related-bottom .related-tile img{height:115px}}

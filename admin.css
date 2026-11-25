@@ -7,3 +7,24 @@
 #aiQueueStatus{min-height:17px;color:#e5b8f3;font-size:11px;margin:5px 0 14px}
 #editAI{margin:12px 0 4px;border-color:#c39adc;background:#3c2c53;color:#f5d5ff}
 @media(max-width:700px){.ai-suggestion-box{flex-direction:column;align-items:stretch;padding:14px}.ai-suggestion-box button{width:100%}}
+
+
+/* Owner-only community management */
+.community-admin-panel{max-width:1200px}
+.community-admin-panel .heading>a{white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center}
+.community-admin-settings{display:flex;align-items:end;gap:16px;flex-wrap:wrap;background:#241a38;padding:18px;border:1px solid #baa0e850;border-radius:12px;margin:20px 0}
+.community-admin-settings>div{flex:1;min-width:210px}
+.community-admin-settings label{font-weight:700}
+.community-admin-settings select{width:100%;min-height:43px}
+.community-admin-settings button{min-height:43px}
+.community-admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:24px}
+.community-admin-grid>section{border:1px solid #b39ad742;background:#1d172d;border-radius:12px;padding:19px;min-width:0}
+.community-admin-grid h3{font:700 23px Outfit,sans-serif;letter-spacing:-.03em;margin:10px 0}
+.community-admin-grid form{display:grid;gap:9px;margin-bottom:20px}
+.community-admin-grid input,.community-admin-grid textarea{width:100%;min-width:0}
+.community-admin-grid textarea{min-height:120px}
+.moderation-list{max-height:420px;overflow:auto;display:grid;gap:9px;margin-top:18px}
+.moderation-item{display:flex;flex-direction:column;gap:6px;background:#302540;border:1px solid #d9b9f534;padding:12px;border-radius:9px;overflow-wrap:anywhere}
+.moderation-item strong{font-size:12px}.moderation-item small{color:#c1afcf;font-size:10px}.moderation-item p{margin:0!important;white-space:pre-wrap;font-size:11px!important}.moderation-item button{align-self:flex-start;margin-top:6px}
+#communityAdminStatus,#pollAdminStatus{min-height:17px;color:#e6bff8;font-size:11px}
+@media(max-width:850px){.community-admin-grid{grid-template-columns:1fr}.community-admin-settings{align-items:stretch;flex-direction:column}.community-admin-settings>div,.community-admin-settings button{width:100%}}

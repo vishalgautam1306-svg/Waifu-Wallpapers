@@ -75,9 +75,10 @@ function relatedRank(x,chosen){
     +(chosen.category===x.category?5:0)+overlap*2
     +(Math.abs((x.width/x.height)-(chosen.width/chosen.height))<0.3?1:0);
 }
-function renderRelated(item){
+function renderRelated(item,remote){
  const target=$('viewerRelated');target.replaceChildren();
- const relevant=[...items,...Object.values(favorites)].filter((x,i,arr)=>x?.id&&arr.findIndex(y=>y?.id===x.id)===i&&x.id!==item.id)
+ const candidates=Array.isArray(remote)?[...remote,...items,...Object.values(favorites)]:[...items,...Object.values(favorites)];
+ const relevant=candidates.filter((x,i,arr)=>x?.id&&arr.findIndex(y=>y?.id===x.id)===i&&x.id!==item.id)
   .sort((a,b)=>relatedRank(b,item)-relatedRank(a,item)).slice(0,6);
  for(const x of relevant){
   const btn=document.createElement('button');btn.type='button';btn.className='related-tile';
@@ -86,6 +87,16 @@ function renderRelated(item){
   btn.append(img,title);btn.addEventListener('click',()=>openDetail(x));target.append(btn);
  }
  target.parentElement.hidden=!relevant.length;
+}
+async function updateRelated(item){
+ if(!api)return;
+ try{
+  const response=await fetch(api+'/api/wallpapers/'+encodeURIComponent(item.id)+'/related');
+  if(!response.ok)return;
+  const payload=await response.json();
+  if(selected?.id!==item.id)return;
+  renderRelated(item,Array.isArray(payload.items)?payload.items:[]);
+ }catch(_){}
 }
 function navigateViewer(delta){
  if(!selected)return;
@@ -124,6 +135,7 @@ function openDetail(item){
  $('viewerPosition').textContent=modalSequence.length>1?(viewerIndex+1)+' / '+modalSequence.length:'';
  for(const key of ['viewerPrev','viewerNext','viewerPrevSmall','viewerNextSmall'])$(key).disabled=modalSequence.length<2;
  renderRelated(item);
+ updateRelated(item);
  const dialog=$('publicDetail');
  $('publicTitle').textContent=item.title;
  $('publicDetailCategory').textContent=[CATS[item.category]||'Artwork',item.series].filter(Boolean).join('  ·  ');

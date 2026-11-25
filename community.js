@@ -190,12 +190,50 @@ async function perform(kind){
  }catch(e){$('downloadStatus').textContent='Could not open wallpaper: '+e.message;}
  finally{busy=false;for(const id of ['publicOriginal','public2x','public4x'])$(id).disabled=false;}
 }
+let reportItemId=null,reportSending=false;
+function openWallpaperReport(){
+ if(!selected)return;
+ reportItemId=selected.id;
+ $('reportArtTitle').textContent='Wallpaper: '+selected.title;
+ $('reportReason').value='';
+ $('reportNote').value='';
+ $('reportFeedback').textContent='';
+ $('reportSubmit').disabled=false;
+ $('reportDialog').showModal();
+}
+async function submitWallpaperReport(event){
+ event.preventDefault();
+ if(reportSending||!reportItemId)return;
+ const reason=$('reportReason').value;
+ if(!reason){$('reportFeedback').textContent='Choose what needs correcting.';return;}
+ reportSending=true;$('reportSubmit').disabled=true;
+ $('reportFeedback').textContent='Sending the report privately to the site owner…';
+ try{
+  const response=await fetch(api+'/api/wallpapers/'+encodeURIComponent(reportItemId)+'/report',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({reason,note:$('reportNote').value.trim().slice(0,300)})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.error||'Could not send report ('+response.status+')');
+  $('reportFeedback').textContent=result.message||'Thank you! The site owner can review this report.';
+  $('reportForm').querySelectorAll('select,textarea').forEach(x=>x.disabled=true);
+ }catch(e){
+  $('reportFeedback').textContent='Report not submitted: '+e.message;
+  $('reportSubmit').disabled=false;
+ }finally{reportSending=false;}
+}
 async function init(){
  const configured=String(window.WAIFU_COMMUNITY_API||'').trim().replace(/\/+$/,'');
  $('publicOriginal').addEventListener('click',()=>perform('original'));
  $('public2x').addEventListener('click',()=>perform('2'));
  $('public4x').addEventListener('click',()=>perform('4'));
  $('publicFavorite').addEventListener('click',()=>{if(selected)favorite(selected);});
+ $('publicReport').addEventListener('click',()=>{
+   $('reportReason').disabled=false;$('reportNote').disabled=false;
+   openWallpaperReport();
+ });
+ $('reportClose').addEventListener('click',()=>$('reportDialog').close());
+ $('reportForm').addEventListener('submit',submitWallpaperReport);
  $('publicClose').addEventListener('click',()=>$('publicDetail').close());
  for(const [id,dir] of [['viewerPrev',-1],['viewerNext',1],['viewerPrevSmall',-1],['viewerNextSmall',1]])$(id).addEventListener('click',()=>navigateViewer(dir));
  $('publicShare').addEventListener('click',shareCurrent);

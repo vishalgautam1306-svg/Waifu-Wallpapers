@@ -161,7 +161,7 @@ function tags(value){
 function idOK(id){return /^[a-f\d-]{36}$/i.test(id);}
 function fields(row){
  let ts=[];try{ts=JSON.parse(row.tags_json||"[]");}catch(_){}
- return {id:row.id,title:row.title,description:row.description||"",series:row.series||"",category:row.category,
+ return {id:row.id,title:row.title,description:row.description||"",series:row.series||"",credit:row.credit||"",category:row.category,
  tags:ts,width:row.width,height:row.height,mime:row.mime,size:row.size,status:row.status,
  createdAt:row.created_at,updatedAt:row.updated_at,
  thumbnail:"/api/wallpapers/"+row.id+"/thumb",original:"/api/wallpapers/"+row.id+"/original"};
@@ -295,6 +295,7 @@ async function upload(request,env){
  const category=CAT.has(form.get("category"))?form.get("category"):"other";
  const description=text(form.get("description"),450);
  const series=text(form.get("series"),100);
+ const credit=text(form.get("credit")||"Waifu Wallpapers · AI-assisted artwork",110);
  const tagList=tags(form.get("tags"));
  const id=crypto.randomUUID(),now=Date.now();
  const ext={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
@@ -302,8 +303,8 @@ async function upload(request,env){
  await env.IMAGES.put(originalKey,bytes,{httpMetadata:{contentType:mime}});
  try{
   await env.IMAGES.put(thumbKey,thumbBytes,{httpMetadata:{contentType:tMime}});
-  await env.DB.prepare("INSERT INTO wallpapers(id,title,description,series,category,tags_json,width,height,mime,size,original_key,thumb_key,status,created_at,updated_at,ip_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id,title,description,series,category,JSON.stringify(tagList),dim[0],dim[1],mime,file.size,originalKey,thumbKey,"draft",now,now,"admin").run();
+  await env.DB.prepare("INSERT INTO wallpapers(id,title,description,series,credit,category,tags_json,width,height,mime,size,original_key,thumb_key,status,created_at,updated_at,ip_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id,title,description,series,credit,category,JSON.stringify(tagList),dim[0],dim[1],mime,file.size,originalKey,thumbKey,"draft",now,now,"admin").run();
  }catch(error){
   await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
   throw error;
@@ -316,12 +317,12 @@ async function edit(request,env,id){
  if(!row)return fail(request,env,404,"Not found");
  const body=await request.json().catch(()=>null);
  if(!body||typeof body!=="object")return fail(request,env,400,"Expected JSON metadata");
- const title=text(body.title??row.title,90),desc=text(body.description??row.description,450),series=text(body.series??row.series,100);
+ const title=text(body.title??row.title,90),desc=text(body.description??row.description,450),series=text(body.series??row.series,100),credit=text(body.credit??row.credit,110);
  if(!title)return fail(request,env,400,"Title required");
  const category=CAT.has(body.category)?body.category:row.category;
  const tagList=body.tags===undefined?JSON.parse(row.tags_json||"[]"):tags(body.tags);
- await env.DB.prepare("UPDATE wallpapers SET title=?,description=?,series=?,category=?,tags_json=?,updated_at=? WHERE id=?")
-  .bind(title,desc,series,category,JSON.stringify(tagList),Date.now(),id).run();
+ await env.DB.prepare("UPDATE wallpapers SET title=?,description=?,series=?,credit=?,category=?,tags_json=?,updated_at=? WHERE id=?")
+  .bind(title,desc,series,credit,category,JSON.stringify(tagList),Date.now(),id).run();
  await audit(env,"metadata_edit", (await fingerprints(request,env)).ip, id);
  return reply(request,env,{id,message:"Updated"});
 }
@@ -507,6 +508,20 @@ async function setWallpaperReportStatus(request,env,id){
  return reply(request,env,{status:body.status});
 }
 
+async function adminTagSuggestions(request,env){
+ // All from existing metadata, no Workers AI inference, billed model, or external call.
+ const result=await env.DB.prepare("SELECT LOWER(TRIM(j.value)) AS tag, COUNT(*) AS uses FROM wallpapers w, json_each(w.tags_json) j WHERE w.status IN ('approved','draft') AND TYPEOF(j.value)='text' AND LENGTH(TRIM(j.value))>1 GROUP BY LOWER(TRIM(j.value)) ORDER BY uses DESC,tag ASC LIMIT 60").all();
+ return reply(request,env,{items:(result.results||[]).map(x=>({tag:x.tag,uses:x.uses}))});
+}
+async function adjacentWallpaper(request,env,id){
+ const row=await env.DB.prepare("SELECT id,created_at FROM wallpapers WHERE id=? AND status='approved'").bind(id).first();
+ if(!row)return fail(request,env,404,"Wallpaper not found");
+ // Displayed newest first: next is older; previous is newer.
+ const prev=await env.DB.prepare("SELECT id,title FROM wallpapers WHERE status='approved' AND (created_at>? OR (created_at=? AND id>?)) ORDER BY created_at ASC,id ASC LIMIT 1").bind(row.created_at,row.created_at,id).first();
+ const next=await env.DB.prepare("SELECT id,title FROM wallpapers WHERE status='approved' AND (created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT 1").bind(row.created_at,row.created_at,id).first();
+ return reply(request,env,{previous:prev||null,next:next||null});
+}
+
 export default {
  async fetch(request,env){
   const url=new URL(request.url),path=url.pathname.replace(/\/+$/,"")||"/";
@@ -515,13 +530,15 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:9});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:10});
    if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
    const artworkReport=/^\/api\/wallpapers\/([\da-f-]{36})\/report$/.exec(path);
    if(artworkReport&&request.method==="POST")return reportWallpaper(request,env,artworkReport[1]);
    const detail=/^\/api\/wallpapers\/([\da-f-]{36})$/.exec(path);
    if(detail&&request.method==="GET")return publicWallpaperDetails(request,env,detail[1]);
+   const adjacent=/^\/api\/wallpapers\/([\da-f-]{36})\/adjacent$/.exec(path);
+   if(adjacent&&request.method==="GET")return adjacentWallpaper(request,env,adjacent[1]);
    const related=/^\/api\/wallpapers\/([\da-f-]{36})\/related$/.exec(path);
    if(related&&request.method==="GET")return publicRelated(request,env,related[1]);
    if(path==="/api/community/status"&&request.method==="GET")return communityStatus(request,env);
@@ -541,6 +558,7 @@ export default {
     if(denied)return denied;
     if(path==="/api/admin/logout"&&request.method==="POST")return logoutAdmin(request,env);
     if(path==="/api/admin/check"&&request.method==="GET")return reply(request,env,{authenticated:true,expiresInMinutes:30});
+    if(path==="/api/admin/tags"&&request.method==="GET")return adminTagSuggestions(request,env);
     if(path==="/api/admin/reports"&&request.method==="GET")return listWallpaperReports(request,env);
     const reportStatus=/^\/api\/admin\/reports\/([\da-f-]{36})$/.exec(path);
     if(reportStatus&&request.method==="POST")return setWallpaperReportStatus(request,env,reportStatus[1]);

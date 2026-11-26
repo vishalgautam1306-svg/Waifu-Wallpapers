@@ -5,16 +5,16 @@
 <meta name="theme-color" content="#080914">
 <meta name="description" content="Discover and share anime wallpapers, download originals or enhance locally with AI 2× and 4×.">
 <title>Explore Anime Wallpapers | Waifu Wallpapers</title>
-<link rel="stylesheet" href="./public.css">
+<link rel="stylesheet" href="./public.css"><link rel="stylesheet" href="./public-v10.css">
 
 <script src="./community-config.js"></script>
-<script src="./community.js" defer></script>
+<script src="./gallery-v10.js" defer></script>
 </head>
 <body>
 <header class="site-header">
-  <a class="brand" href="./index.html"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
-  <nav class="desktop-nav" aria-label="Primary"><a href="#feed">Wallpapers</a><a href="#genres">Categories</a><a href="./library.html">♡ My favorites</a><a href="./ai.html">AI Studio</a><a href="./community.html">Community</a></nav>
-  <div class="header-cta"><a class="button button-small button-accent" href="./community.html">◌ Community</a></div>
+ <a class="brand" href="./index.html" aria-label="Waifu Wallpapers homepage"><span class="brand-mark">✦</span> WAIFU<span>WALLPAPERS</span></a>
+ <nav class="desktop-nav" aria-label="Primary"><a href="./index.html#feed" class="current">Wallpapers</a><a href="./index.html#genres">Categories</a><a href="./ai.html">AI Studio</a><a href="./community.html">Community</a><a href="./library.html" class="">♡ Favorites</a></nav>
+ <div class="header-cta"><a class="button button-small button-accent" href="./index.html#feed">Browse gallery ↗</a></div>
 </header>
 <main>
   <section class="community-hero">
@@ -42,8 +42,8 @@
 </section>
   <div class="notice community-notice" role="status"><span class="notice-dot">●</span><p id="connectionState">Connecting to wallpaper storage…</p></div>
   <section class="collection" id="feed" aria-labelledby="feed-heading">
-    <div class="section-top"><div><div class="kicker">CURATED ANIME WALLPAPER ARCHIVE</div><h2 id="feed-heading">Explore <em>wallpapers.</em></h2><p>Only admin-published wallpapers appear here. AI enhancement runs locally on your device.</p></div></div>
-    <div class="public-filter-row"><label for="publicSearch">Search wallpapers</label><input id="publicSearch" type="search" placeholder="Character, series, anime, scenery…"><label for="publicCategory">Category</label><select id="publicCategory"><option value="">All categories</option><option value="anime">Anime</option><option value="manga">Manga & comics</option><option value="gaming">Games</option><option value="oled">OLED / Dark</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="cyberpunk">Cyberpunk</option><option value="space">Space & cosmos</option><option value="nature">Nature & scenery</option><option value="cityscapes">Cities & skylines</option><option value="aesthetic">Aesthetic</option><option value="minimal">Minimal</option><option value="abstract">Abstract</option><option value="movies">Movies & TV</option><option value="3d">3D art</option><option value="cars">Cars & vehicles</option><option value="animals">Animals</option><option value="architecture">Architecture</option><option value="photography">Photography</option><option value="digitalart">Digital art</option><option value="horror">Horror</option><option value="kawaii">Cute / Kawaii</option><option value="seasonal">Seasonal</option><option value="sports">Sports</option><option value="other">Other</option></select><label for="publicTag">Tags</label><input id="publicTag" type="search" placeholder="e.g. beach, ocean, bedroom"><label for="publicOrient">Screen</label><select id="publicOrient"><option value="">Any screen</option><option value="landscape">Desktop / landscape</option><option value="portrait">Phone / portrait</option><option value="square">Square</option></select><button id="publicRandom" class="button button-secondary" type="button" title="Open a random wallpaper">⚄ Surprise me</button><button id="publicFavorites" class="button button-secondary" type="button">♡ Favorites</button></div><div class="wall-grid" id="publicGrid" aria-live="polite"></div>
+    <div class="section-top"><div><div class="kicker">CURATED ANIME WALLPAPER ARCHIVE</div><h2 id="feed-heading">Explore <em>wallpapers.</em></h2><p>All published artwork is hosted in Cloudflare R2. Open any wallpaper for a full-page view, downloads and related artwork.</p></div></div>
+    <div class="public-filter-row"><label for="publicSearch">Search wallpapers</label><input id="publicSearch" type="search" placeholder="Character, series, anime, scenery…"><label for="publicCategory">Category</label><select id="publicCategory"><option value="">All categories</option><option value="anime">Anime</option><option value="manga">Manga & comics</option><option value="gaming">Games</option><option value="oled">OLED / Dark</option><option value="fantasy">Fantasy</option><option value="scifi">Sci-Fi</option><option value="cyberpunk">Cyberpunk</option><option value="space">Space & cosmos</option><option value="nature">Nature & scenery</option><option value="cityscapes">Cities & skylines</option><option value="aesthetic">Aesthetic</option><option value="minimal">Minimal</option><option value="abstract">Abstract</option><option value="movies">Movies & TV</option><option value="3d">3D art</option><option value="cars">Cars & vehicles</option><option value="animals">Animals</option><option value="architecture">Architecture</option><option value="photography">Photography</option><option value="digitalart">Digital art</option><option value="horror">Horror</option><option value="kawaii">Cute / Kawaii</option><option value="seasonal">Seasonal</option><option value="sports">Sports</option><option value="other">Other</option></select><label for="publicTag">Tags</label><input id="publicTag" type="search" placeholder="e.g. beach, ocean, bedroom"><label for="publicOrient">Screen</label><select id="publicOrient"><option value="">Any screen</option><option value="landscape">Desktop / landscape</option><option value="portrait">Phone / portrait</option><option value="square">Square</option></select><button id="publicRandom" class="button button-secondary" type="button" title="Open a random wallpaper">⚄ Surprise me</button><button id="publicFavorites" class="button button-secondary" type="button">♡ Favorites</button><button id="resetFilters" class="button button-secondary reset-filters" type="button">↺ Reset filters</button></div><div class="wall-grid" id="publicGrid" aria-live="polite"></div>
     <div id="publicEmpty" class="empty-state"><div class="empty-art" aria-hidden="true"><span>✧</span><b>夜</b></div><div class="empty-copy"><div class="kicker">THE ARCHIVE</div><h3 id="emptyTitle">Connecting to storage</h3><p id="emptyDesc">Preparing the shared collection.</p><a class="button button-accent" href="./index.html#genres">Explore categories</a></div></div>
     <div class="load-row"><button type="button" id="loadMore" class="button button-secondary" hidden>Load more wallpapers ↓</button></div>
   </section>
@@ -51,71 +51,5 @@
   <section class="feature-strip"><div><span class="feat-icon">01</span><h3>Stored as originals</h3><p>Only compressed originals and preview thumbnails live in the cloud.</p></div><div><span class="feat-icon">02</span><h3>Community reviewed</h3><p>Only the owner can upload and publish. No account needed to browse.</p></div><div><span class="feat-icon">03</span><h3>AI on your device</h3><p>2× or 4× downloads are created when requested, without extra cloud storage.</p></div></section>
 </main>
 <footer><span>✦ WAIFU WALLPAPERS</span><p>Free browsing and downloads · Guest favorites stay in your browser · Admin-only publishing</p><a href="./ai.html">AI Studio ↗</a><a href="./community.html">Community ↗</a></footer>
-<dialog id="publicDetail" class="wallpaper-viewer" aria-labelledby="publicTitle">
-  <div class="viewer-shell">
-    <header class="viewer-toolbar">
-      <div class="viewer-path"><span class="viewer-brand-mark" aria-hidden="true">✦</span><span>WAIFU WALLPAPERS</span><span aria-hidden="true">/</span><span>WALLPAPER VIEWER</span></div>
-      <div class="viewer-tools"><button type="button" id="publicShare" class="viewer-mini-button" title="Copy wallpaper link">⧉ <span>Copy link</span></button>
-        <a id="publicExpand" class="viewer-mini-button" href="#" target="_blank" rel="noopener noreferrer" aria-label="Open original wallpaper in new tab">⤢ <span>View full image</span></a>
-        <button class="viewer-close" type="button" id="publicClose" aria-label="Close wallpaper viewer">✕ <span>Close</span></button>
-      </div>
-    </header>
-    <div class="viewer-grid">
-      <section class="viewer-artwork" aria-label="Selected wallpaper image">
-        <div id="viewerAmbient" class="viewer-ambient" aria-hidden="true"></div>
-        <button class="viewer-edge viewer-edge-left" type="button" id="viewerPrev" aria-label="Previous wallpaper" title="Previous wallpaper">‹</button><div class="viewer-art-inner">
-          <img id="publicImage" alt="Wallpaper preview">
-        </div>
-        <button class="viewer-edge viewer-edge-right" type="button" id="viewerNext" aria-label="Next wallpaper" title="Next wallpaper">›</button><div class="viewer-art-foot"><span>✧ ORIGINAL ARTWORK</span><span id="publicArtResolution"></span></div>
-      </section>
-      <aside class="viewer-details">
-        <div class="viewer-eyebrow"><span class="viewer-live-dot"></span> WALLPAPER DETAILS</div>
-        <h2 id="publicTitle"></h2>
-        <div class="viewer-series-line" id="publicDetailCategory"></div>
-        <p class="viewer-description" id="publicDescription"></p>
-        <div class="viewer-specs">
-          <div><span>Resolution</span><strong id="publicRes"></strong></div>
-          <div><span>File size</span><strong id="publicSize"></strong></div>
-          <div><span>Orientation</span><strong id="publicOrientation"></strong></div>
-          <div><span>Format</span><strong id="publicFormat"></strong></div>
-        </div>
-        <div class="viewer-actions">
-          <div class="viewer-actions-heading"><strong>Download wallpaper</strong><small>Free · No account needed</small></div>
-          <button type="button" class="viewer-download-primary" id="publicOriginal"><span aria-hidden="true">↓</span><span>Download original<small>Full original resolution</small></span></button>
-          <div class="viewer-ai-heading"><span aria-hidden="true">✦</span> ENHANCE WITH AI <span class="viewer-ai-note">On your device</span></div>
-          <div class="viewer-ai-row"><button type="button" id="public2x"><span>2× AI</span><small>Sharper details</small></button><button type="button" id="public4x"><span>4× AI</span><small>Ultra high resolution</small></button></div>
-          <button type="button" class="viewer-favorite" id="publicFavorite">♡ Save to favorites</button>
-          <button type="button" class="viewer-report-button" id="publicReport">⚑ Report incorrect details or an issue</button>
-          <p id="downloadStatus" class="viewer-status" role="status" aria-live="polite">AI enhancement runs locally in your browser.</p>
-        </div>
-        <div class="viewer-nextline"><button type="button" id="viewerPrevSmall">‹ Previous</button><span id="viewerPosition" aria-live="polite"></span><button type="button" id="viewerNextSmall">Next ›</button></div><div id="viewerTagsSection" class="viewer-tags-section" hidden><div class="viewer-tags-heading">DISCOVER MORE</div><div id="publicTags" class="viewer-tags"></div></div>
-      </aside>
-    </div>
-    <section class="viewer-related viewer-related-bottom" aria-label="Similar wallpapers">
-      <div class="viewer-related-head"><strong>You may also like</strong><span>More art from similar series, categories and tags</span></div>
-      <div class="viewer-related-grid" id="viewerRelated"></div>
-    </section>
-  </div>
-</dialog>
-<dialog id="reportDialog" class="wallpaper-report-dialog" aria-labelledby="reportHeading">
-  <form id="reportForm">
-    <div class="report-head"><div><div class="eyebrow">HELP IMPROVE THE CATALOG</div><h2 id="reportHeading">Report a wallpaper issue</h2></div><button type="button" id="reportClose" aria-label="Close report form">✕</button></div>
-    <p id="reportArtTitle" class="report-art-title"></p>
-    <label for="reportReason">What's the problem?</label>
-    <select id="reportReason" required>
-      <option value="">Choose a reason</option>
-      <option value="wrong_details">Incorrect title or anime/game series</option>
-      <option value="wrong_tags">Wrong category or tags</option>
-      <option value="broken_image">Broken image or download</option>
-      <option value="copyright">Ownership or copyright concern</option>
-      <option value="other">Other issue</option>
-    </select>
-    <label for="reportNote">More details (optional)</label>
-    <textarea id="reportNote" maxlength="300" rows="3" placeholder="Example: This is Akaza, not Rengoku. Please avoid personal/contact information."></textarea>
-    <p class="report-hint">Reports go privately to the site owner. No login required; limited to prevent spam.</p>
-    <button type="submit" id="reportSubmit" class="viewer-download-primary">Send report</button>
-    <p id="reportFeedback" role="status" aria-live="polite"></p>
-  </form>
-</dialog>
 </body>
 </html>

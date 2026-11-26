@@ -6,10 +6,22 @@ const categoryLabels={"anime":"Anime","manga":"Manga & comics","gaming":"Games",
 let api='',items=[],favorites={},nextPage=0,loadedPages=0,busy=false,seq=0,scrollTimer=0;
 try{favorites=JSON.parse(localStorage.getItem(FAV_KEY)||'{}')||{};}catch(_){favorites={};}
 function viewKey(){return 'ww:gallery:view:'+location.pathname+location.search;}
+function itemCacheKey(){return viewKey()+':catalog';}
 function rememberView(){
  try{sessionStorage.setItem(viewKey(),JSON.stringify({scroll:window.scrollY,pages:loadedPages}));}catch(_){}
 }
 function fetchView(){try{return JSON.parse(sessionStorage.getItem(viewKey())||'{}')||{};}catch(_){return {};}}
+function saveCatalogCache(){
+ if(favoritesPage)return;
+ try{sessionStorage.setItem(itemCacheKey(),JSON.stringify({items,nextPage,loadedPages,savedAt:Date.now()}));}catch(_){}
+}
+function readCatalogCache(){
+ try{
+  const result=JSON.parse(sessionStorage.getItem(itemCacheKey())||'null');
+  if(result&&Array.isArray(result.items)&&result.items.length<=4000&&Date.now()-result.savedAt<6*3600000)return result;
+ }catch(_){}
+ return null;
+}
 function scrollSave(){if(scrollTimer)return;scrollTimer=setTimeout(()=>{scrollTimer=0;rememberView();},220);}
 function info(message,failed=false){
  const e=$('connectionState');if(e)e.textContent=message;
@@ -94,13 +106,14 @@ async function load(reset=false){
   for(const item of data.items)if(!seen.has(item.id)){items.push(item);seen.add(item.id);}
   nextPage=data.nextPage===null?null:data.nextPage;loadedPages++;
   info(items.length+' artworks · Cloud gallery connected');
+  saveCatalogCache();
  }catch(e){info('Gallery unavailable: '+e.message,true);nextPage=null;}
  finally{busy=false;show();if(cycle!==seq)await load();}
 }
 async function applyFilters(){
  seq++;items=[];nextPage=0;loadedPages=0;
  writeFilters();syncGenres();
- try{sessionStorage.removeItem(viewKey());}catch(_){}
+ try{sessionStorage.removeItem(viewKey());sessionStorage.removeItem(itemCacheKey());}catch(_){}
  await load();
  document.getElementById('feed')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -137,13 +150,19 @@ async function initialize(){
   if(!favoritesPage)applyFilters();
  });
  window.addEventListener('scroll',scrollSave,{passive:true});
- window.addEventListener('pagehide',rememberView);
+ window.addEventListener('pagehide',()=>{rememberView();saveCatalogCache();});
  if(!api){info('Gallery API not configured',true);nextPage=null;show();return;}
  if(favoritesPage){nextPage=null;show();info('Favorites are browser bookmarks · wallpapers stored on Cloudflare');}
  else{
-  const last=fetchView(),wanted=Math.min(10,Math.max(1,Number(last.pages)||1));
-  for(let i=0;i<wanted;i++){await load();if(nextPage===null)break;}
-  if(Number.isFinite(last.scroll)&&last.scroll>0)setTimeout(()=>window.scrollTo({top:last.scroll,behavior:'instant'}),80);
+  const last=fetchView(),cached=readCatalogCache();
+  if(cached){
+   items=cached.items;nextPage=cached.nextPage;loadedPages=cached.loadedPages;
+   info(items.length+' artworks · Restored your gallery position');show();
+  }else{
+   const wanted=Math.min(60,Math.max(1,Number(last.pages)||1));
+   for(let i=0;i<wanted;i++){await load();if(nextPage===null)break;}
+  }
+  if(Number.isFinite(last.scroll)&&last.scroll>0)setTimeout(()=>window.scrollTo({top:last.scroll,behavior:'instant'}),90);
  }
 }
 document.addEventListener('DOMContentLoaded',initialize);

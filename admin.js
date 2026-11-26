@@ -433,6 +433,68 @@ async function moderateMessage(id,status){
   await loadAdminMessages();
  }catch(e){$('communityAdminStatus').textContent=e.message;}
 }
+
+const STATIC_TAGS=["anime girl","anime boy","night","moon","forest","beach","ocean","bedroom","landscape","city","neon","rain","purple","blue","sunset","sakura","stars","oled","portrait","4k"];
+function splitTags(value){
+ return [...new Set(String(value||"").split(',').map(t=>t.trim().replace(/^#/,'').toLowerCase()).filter(Boolean))].slice(0,25);
+}
+function currentTagInput(){return $('editDialog')?.open?$('editTags'):(activeTagInput?.isConnected?activeTagInput:null);}
+function insertTags(values){
+ const field=currentTagInput();
+ if(!field){$('tagHelperStatus').textContent='Click a wallpaper Tags field first, then choose tags.';return;}
+ const list=splitTags([...splitTags(field.value),...splitTags(Array.isArray(values)?values.join(','):values)].join(','));
+ field.value=list.join(', ');
+ field.dispatchEvent(new Event('change',{bubbles:true}));
+ if($('editDialog')?.open)$('editStatus').textContent='Tags added. Click Save metadata to keep changes.';
+ else $('tagHelperStatus').textContent='Tags added to selected wallpaper.';
+}
+function storeTagPresets(){try{localStorage.setItem(TAG_PRESET_KEY,JSON.stringify(savedTagPresets.slice(0,20)));}catch(_){}}
+function saveCurrentTagPreset(name){
+ const field=currentTagInput(),tags=splitTags(field?.value||'');
+ name=String(name||'').trim().slice(0,40);
+ const notice=$('editDialog')?.open?$('editStatus'):$('tagHelperStatus');
+ if(!name||!tags.length){notice.textContent='Select a Tags field containing tags and enter a preset name.';return;}
+ savedTagPresets=[{name,tags},...savedTagPresets.filter(p=>p.name.toLowerCase()!==name.toLowerCase())].slice(0,20);
+ storeTagPresets();renderTagTools();$('presetName').value='';
+ notice.textContent='Saved "'+name+'" as a reusable tag preset on this device.';
+}
+function renderTagTools(){
+ const popular=[...new Set([...tagSuggestions.map(x=>x.tag),...STATIC_TAGS])].slice(0,35);
+ for(const id of ['uploadTagSuggestions','editTagSuggestions']){
+  const root=$(id);root.replaceChildren();
+  for(const tag of popular){
+   const b=node('button','tag-chip','#'+tag);b.type='button';b.title='Add '+tag+' to selected Tags field';
+   b.addEventListener('click',()=>insertTags([tag]));root.append(b);
+  }
+ }
+ for(const id of ['tagPresetList','editTagPresetList']){
+  const root=$(id);root.replaceChildren();
+  for(const preset of savedTagPresets){
+   if(!preset||!Array.isArray(preset.tags))continue;
+   const row=node('div','tag-preset');
+   const add=node('button','tag-preset-apply',preset.name+' · '+preset.tags.length+' tags');add.type='button';add.title=preset.tags.join(', ');
+   add.addEventListener('click',()=>insertTags(preset.tags));
+   const del=node('button','tag-preset-remove','×');del.type='button';del.title='Delete tag preset';
+   del.addEventListener('click',()=>{savedTagPresets=savedTagPresets.filter(x=>x.name!==preset.name);storeTagPresets();renderTagTools();});
+   row.append(add,del);root.append(row);
+  }
+  if(!root.children.length)root.append(node('span','tag-empty','No saved sets yet.'));
+ }
+}
+async function loadTagSuggestions(){
+ renderTagTools();
+ if(!credential)return;
+ try{const result=await jsonOrThrow(await request('/api/admin/tags'));tagSuggestions=Array.isArray(result.items)?result.items.filter(x=>x&&typeof x.tag==='string'):[];renderTagTools();}
+ catch(_){$('tagHelperStatus').textContent='Using standard tags. The cloud tag history is unavailable.';}
+}
+function applyBulkTags(){
+ const toAdd=splitTags($('bulkTags').value);
+ if(!queue.length||!toAdd.length){$('tagHelperStatus').textContent='Select wallpapers and enter some tags first.';return;}
+ if(queue.length>10&&!confirm('Apply '+toAdd.length+' tags to ALL '+queue.length+' queued wallpapers?'))return;
+ for(const item of queue)item.tags=splitTags([...splitTags(item.tags),...toAdd].join(',')).join(', ');
+ renderQueue();$('tagHelperStatus').textContent='Added tags to '+queue.length+' queued wallpapers. Review them before uploading.';
+}
+
 function bind(){
  $('loginForm').addEventListener('submit',login);
  $('logout').addEventListener('click',logout);
@@ -473,6 +535,20 @@ function bind(){
  ['drop','dragleave'].forEach(event=>box.addEventListener(event,e=>{e.preventDefault();box.classList.remove('drag');}));
  box.addEventListener('drop',e=>selectFiles(e.dataTransfer.files));
  for(const [key,val] of Object.entries(CATEGORIES))$('editCategory').append(new Option(val,key));
+ $('applyBulkTags').addEventListener('click',applyBulkTags);
+ $('saveTagPreset').addEventListener('click',()=>saveCurrentTagPreset($('presetName').value.trim()));
+ $('saveEditTagPreset').addEventListener('click',()=>{
+  const name=prompt('Name this reusable tag set (for example, Ocean scenes):');
+  if(name)saveCurrentTagPreset(name.trim());
+ });
+ $('editTags').addEventListener('focus',()=>{activeTagInput=$('editTags');});
+ $('editDialog').addEventListener('click',event=>{
+  const d=$('editDialog');
+  if(event.target!==d)return;
+  const r=d.getBoundingClientRect();
+  if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)d.close();
+ });
+ renderTagTools();
  window.addEventListener('pagehide',()=>{credential='';sessionExpiry=0;clearUrls();});
 }
 document.addEventListener('DOMContentLoaded',()=>{

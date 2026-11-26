@@ -54,3 +54,30 @@
 .manage-item .meta{min-width:0;overflow-wrap:anywhere}
 .manage-item .meta small{max-width:100%;overflow-wrap:anywhere}
 @media(max-width:680px){.catalog-find{padding:15px}.catalog-find form{flex-direction:column}.catalog-find button{width:100%}.catalog-pagination button{min-width:93px}.report-item-head{flex-direction:column}.report-item .manage-actions button,.report-item .manage-actions a{flex:1 1 130px}}
+
+
+/* V10 Owner Studio: reusable tags and credits */
+.tag-workbench{border:1px solid #c29de655;border-radius:14px;background:linear-gradient(135deg,#342247,#1b162c);padding:20px;margin:19px 0}
+.tag-workbench h3{font:800 23px Outfit,system-ui;margin:5px 0 8px;letter-spacing:-.03em;color:#f7e9ff}
+.tag-workbench p{font-size:11px;line-height:1.75;color:#bfb1cc;max-width:850px}
+.tag-suggestion-chips{display:flex;gap:7px;flex-wrap:wrap;margin:13px 0 19px;max-height:115px;overflow:auto}
+.tag-suggestion-chips button{min-height:36px;border-radius:25px;padding:7px 11px;border:1px solid #c5a6e968;background:#251b37;color:#ead4f3;cursor:pointer;font:600 11px system-ui}
+.tag-suggestion-chips button:hover{border-color:#f0c5ff;background:#553f6a}
+.tag-bulk-add,.tag-preset-add{display:grid;gap:6px;margin:14px 0}
+.tag-bulk-add>div,.tag-preset-add>div{display:flex;align-items:center;gap:9px}
+.tag-bulk-add input,.tag-preset-add input{flex:1;min-width:0;min-height:43px;width:100%}
+.tag-bulk-add button,.tag-preset-add button{min-height:43px;white-space:nowrap}
+.tag-bulk-add label,.tag-preset-add label{font-size:11px;color:#e2c7f2;font-weight:800}
+.tag-preset-list{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.tag-preset{display:inline-flex;border:1px solid #d5b3ec65;border-radius:8px;overflow:hidden}
+.tag-preset .tag-preset-apply{background:#332441;border:0;border-radius:0;color:#f2dbfe;padding:8px 12px;min-height:37px;font-size:11px;font-weight:700}
+.tag-preset .tag-preset-remove{background:#523453;border:0;border-radius:0;color:#f7d4e1;padding:7px 10px;min-height:37px;font-size:15px}
+.tag-preset button:hover{filter:brightness(1.2)}
+.tag-empty{color:#9c8bab;font-size:11px}
+#tagHelperStatus{font-size:11px;color:#dfc7f6;min-height:18px;margin:6px 0 0}
+.edit-tags-hint{color:#baa9c9!important;font-size:11px!important;margin:6px 0!important}
+#editTagSuggestions{max-height:90px}
+#editTagPresetList{margin:9px 0}
+#saveEditTagPreset{margin:5px 0 10px}
+#editCredit{width:100%;min-height:42px}
+@media(max-width:680px){.tag-workbench{padding:14px}.tag-bulk-add>div,.tag-preset-add>div{flex-direction:column;align-items:stretch}.tag-bulk-add button,.tag-preset-add button{width:100%}}

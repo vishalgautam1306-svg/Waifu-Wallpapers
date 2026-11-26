@@ -95,7 +95,7 @@ async function load(reset=false){
   nextPage=data.nextPage===null?null:data.nextPage;loadedPages++;
   info(items.length+' artworks · Cloud gallery connected');
  }catch(e){info('Gallery unavailable: '+e.message,true);nextPage=null;}
- finally{busy=false;show();}
+ finally{busy=false;show();if(cycle!==seq)await load();}
 }
 async function applyFilters(){
  seq++;items=[];nextPage=0;loadedPages=0;

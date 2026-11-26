@@ -14,6 +14,9 @@ const SERIES=[
 ];
 let api='',credential='',queue=[],visible=[],adminItems=[],uploading=false,cancel=false,editing=null;
 let sessionExpiry=0,scanning=false;
+let activeTagInput=null,tagSuggestions=[],savedTagPresets=[];
+const TAG_PRESET_KEY='waifu-wallpapers-owner-tag-presets';
+try{savedTagPresets=JSON.parse(localStorage.getItem(TAG_PRESET_KEY)||'[]')||[]}catch(_){savedTagPresets=[];}
 let catalogPage=0,catalogNext=null,reportsPage=0,reportsNext=null,adminSearchTerm='',adminStatus='draft';
 const urls=[];
 function blobUrl(blob){const url=URL.createObjectURL(blob);urls.push(url);return url;}
@@ -27,7 +30,7 @@ function proposed(file){
  const matches=["beach","ocean","bedroom","anime girl","night","sky","city","rain","forest","purple","blue","dark","cute","sunset","sakura","moon","stars","portrait"].filter(x=>raw.includes(x));
  const words=name.split(' ').filter(x=>x.length>3).slice(0,5).map(x=>x.toLowerCase());
  const tags=[...new Set([...(series?[series]:[]),...matches,...words])].slice(0,20).join(', ');
- return {title:name.slice(0,90)||"Untitled wallpaper",series,category,description:(name||"Wallpaper")+(series?" · "+series:""),tags};
+ return {title:name.slice(0,90)||"Untitled wallpaper",series,category,description:(name||"Wallpaper")+(series?" · "+series:""),tags,credit:"Waifu Wallpapers · AI-assisted artwork"};
 }
 function request(path,opts={}){
  if(!credential||Date.now()>=sessionExpiry){if(credential)logout();return Promise.reject(new Error('Admin session expired. Please sign in again.'));}
@@ -71,6 +74,7 @@ async function login(ev){
   const deep=new URLSearchParams(location.search).get('wallpaper');
   if(deep){setPanel('manage');$('adminSearch').value=deep;await findCatalogWallpaper();}
   else setPanel('upload');
+  loadTagSuggestions();
  }catch(e){credential='';sessionExpiry=0;$('loginState').textContent=e.message;}
 }
 function node(tag,cls,label){
@@ -80,6 +84,7 @@ function inputFor(row,key,label,max=100){
  const wrap=node('label');wrap.textContent=label;
  const inp=document.createElement('input');inp.value=row[key]||'';inp.maxLength=max;
  inp.addEventListener('change',()=>{row[key]=inp.value.trim().slice(0,max);});
+ if(key==='tags')inp.addEventListener('focus',()=>{activeTagInput=inp;$('tagHelperStatus').textContent='Selected '+(row.title||'wallpaper')+'. Tap tags or presets below.';});
  wrap.append(inp);return wrap;
 }
 function renderQueue(){
@@ -91,6 +96,7 @@ function renderQueue(){
   const fields=node('div','queue-fields');
   fields.append(inputFor(item,'title','Title',90),inputFor(item,'series','Series',100));
   const desc=inputFor(item,'description','Description',450);desc.classList.add('wide');fields.append(desc);
+  const credit=inputFor(item,'credit','Artist / AI credit',110);credit.classList.add('wide');fields.append(credit);
   const tags=inputFor(item,'tags','Search tags (comma separated)',600);tags.classList.add('wide');fields.append(tags);
   const sel=document.createElement('select');sel.setAttribute('aria-label','Category for '+item.title);
   for(const [key,val] of Object.entries(CATEGORIES))sel.append(new Option(val,key));
@@ -204,7 +210,7 @@ async function uploadQueue(){
    try{
     const thumbnail=await thumb(item.file);
     const data=new FormData();data.append('image',item.file);data.append('thumbnail',thumbnail);
-    for(const k of ['title','series','category','description','tags'])data.append(k,item[k]||'');
+    for(const k of ['title','series','category','description','tags','credit'])data.append(k,item[k]||'');
     await jsonOrThrow(await request('/api/admin/upload',{method:'POST',body:data}));
     success++;
    }catch(e){failures.push(item.file.name+': '+e.message);}
@@ -339,14 +345,15 @@ function openEdit(item){
  editing=item;const dialog=$('editDialog');
  $('editTitle').value=item.title||'';$('editSeries').value=item.series||'';
  $('editDescription').value=item.description||'';$('editTags').value=(item.tags||[]).join(', ');
- $('editCategory').value=item.category||'other';$('editStatus').textContent='';
+ $('editCategory').value=item.category||'other';$('editCredit').value=item.credit||'Waifu Wallpapers · AI-assisted artwork';$('editStatus').textContent='';
+ renderTagTools();
  $('editArtworkId').textContent='Wallpaper ID: '+item.id;
  preview(item.id,$('editPreview'));dialog.showModal();
 }
 async function saveEdit(e){
  e.preventDefault();if(!editing)return;
  const body={title:$('editTitle').value,series:$('editSeries').value,category:$('editCategory').value,
-  description:$('editDescription').value,tags:$('editTags').value.split(',').map(t=>t.trim()).filter(Boolean)};
+  description:$('editDescription').value,tags:$('editTags').value.split(',').map(t=>t.trim()).filter(Boolean),credit:$('editCredit').value};
  try{
   await jsonOrThrow(await request('/api/admin/wallpapers/'+editing.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
   $('editDialog').close();refresh();
@@ -442,7 +449,7 @@ function bind(){
  $('reportsNext').addEventListener('click',()=>{if(reportsNext!==null){reportsPage=reportsNext;refreshReports();}});
  $('copyArtworkLink').addEventListener('click',()=>{
    if(!editing)return;
-   const url=new URL('./index.html?wallpaper='+encodeURIComponent(editing.id),location.href).href;
+   const url=new URL('./wallpaper.html?id='+encodeURIComponent(editing.id),location.href).href;
    if(navigator.clipboard?.writeText)navigator.clipboard.writeText(url).then(()=>{$('editStatus').textContent='Public wallpaper link copied.'}).catch(()=>prompt('Copy this link:',url));
    else prompt('Copy this link:',url);
  });

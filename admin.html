@@ -20,7 +20,7 @@
 <div class="uploadqueue" id="queue"></div><div class="meter"><span id="meter"></span></div><p id="uploadStatus" role="status"></p>
 <div class="footeractions"><button type="button" class="secondary" id="cancelUpload" disabled>Stop after current file</button><button type="button" class="primary" id="startUpload" disabled>Upload drafts securely ↗</button></div>
 </section>
-<section id="managePane" class="panel" hidden><div class="heading"><div><span class="eyebrow">02 / CONTENT MODERATION</span><h2>Manage the archive.</h2><p>Change metadata, approve drafts and unpublish artwork. Changes are enforced by the Cloudflare API, not by hiding buttons.</p></div></div>
+<section id="managePane" class="panel" hidden><p class="deletion-explainer"><strong>Two deletion steps:</strong> “Remove from catalog” hides a wallpaper without deleting its files. To erase the original, thumbnail and database entry, select <strong>Removed</strong> below and click <strong>Delete permanently</strong>. This cannot be undone.</p><div class="heading"><div><span class="eyebrow">02 / CONTENT MODERATION</span><h2>Manage the archive.</h2><p>Change metadata, approve drafts and unpublish artwork. Changes are enforced by the Cloudflare API, not by hiding buttons.</p></div></div>
 <div class="catalog-find">
   <label for="adminSearch">Find any wallpaper — paste its public link, exact ID, title, anime series or tag</label>
   <form id="adminSearchForm"><input id="adminSearch" type="search" maxlength="400" placeholder="Paste a wallpaper link, or search Akaza, Demon Slayer, moon…" autocomplete="off"><button type="submit" class="primary">Find wallpaper</button><button type="button" class="secondary" id="clearAdminSearch">Clear</button></form>

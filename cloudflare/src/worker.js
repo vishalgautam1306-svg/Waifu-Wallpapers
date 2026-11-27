@@ -60,6 +60,11 @@ async function ensureAdmin(request,env){
  if(!row||row.expires_at<=now)return fail(request,env,401,"Session expired. Sign in again.");
  const fp=await fingerprints(request,env);
  if(!secureEqual(row.ip_hash,fp.ip)||!secureEqual(row.ua_hash,fp.ua))return fail(request,env,401,"Admin session device verification failed");
+ // Extend only active, correctly authenticated sessions, at most about once per 20 minutes.
+ // Keeps a long sequential upload alive; sessions still expire 30 minutes after the last activity.
+ if(row.expires_at-now<10*60*1000){
+  await env.DB.prepare("UPDATE admin_sessions SET expires_at=? WHERE token_hash=? AND expires_at>?").bind(now+SESSION_MS,hash,now).run();
+ }
  return null;
 }
 async function loginAdmin(request,env){
@@ -297,14 +302,21 @@ async function upload(request,env){
  const series=text(form.get("series"),100);
  const credit=text(form.get("credit")||"Waifu Wallpapers · AI-assisted artwork",110);
  const tagList=tags(form.get("tags"));
+ const uploadRequestId=String(form.get("upload_request_id")||"").trim();
+ if(uploadRequestId&&!/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(uploadRequestId))return fail(request,env,400,"Invalid upload request ID");
+ // If the browser retries after losing a response, return the existing draft instead of duplicating it.
+ if(uploadRequestId){
+  const existing=await env.DB.prepare("SELECT id,status FROM wallpapers WHERE upload_request_id=?").bind(uploadRequestId).first();
+  if(existing)return reply(request,env,{id:existing.id,status:existing.status,alreadyUploaded:true,message:"Previously uploaded; duplicate avoided"});
+ }
  const id=crypto.randomUUID(),now=Date.now();
  const ext={"image/png":"png","image/jpeg":"jpg","image/webp":"webp"};
  const originalKey="originals/"+id+"."+ext[mime],thumbKey="thumbs/"+id+"."+ext[tMime];
  await env.IMAGES.put(originalKey,bytes,{httpMetadata:{contentType:mime}});
  try{
   await env.IMAGES.put(thumbKey,thumbBytes,{httpMetadata:{contentType:tMime}});
-  await env.DB.prepare("INSERT INTO wallpapers(id,title,description,series,credit,category,tags_json,width,height,mime,size,original_key,thumb_key,status,created_at,updated_at,ip_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id,title,description,series,credit,category,JSON.stringify(tagList),dim[0],dim[1],mime,file.size,originalKey,thumbKey,"draft",now,now,"admin").run();
+  await env.DB.prepare("INSERT INTO wallpapers(id,title,description,series,credit,category,tags_json,width,height,mime,size,original_key,thumb_key,status,created_at,updated_at,ip_hash,upload_request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id,title,description,series,credit,category,JSON.stringify(tagList),dim[0],dim[1],mime,file.size,originalKey,thumbKey,"draft",now,now,"admin",uploadRequestId).run();
  }catch(error){
   await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
   throw error;
@@ -575,7 +587,7 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:11});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:12});
    if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
    if(path==="/api/gallery/version"&&request.method==="GET")return galleryVersion(request,env);

@@ -17,7 +17,7 @@ const MAX_BATCH_FILES=1000,QUEUE_PAGE_SIZE=25;
 let queuePage=0;
 const queuePreviewUrls=[];
 const droppedFolderPaths=new WeakMap();
-function filePath(file){return droppedFolderPaths.get(file)||filePath(file);}
+function filePath(file){return droppedFolderPaths.get(file)||file.webkitRelativePath||file.name;}
 let sessionExpiry=0,scanning=false;
 let activeTagInput=null,tagSuggestions=[],savedTagPresets=[];
 const TAG_PRESET_KEY='waifu-wallpapers-owner-tag-presets';
@@ -142,11 +142,11 @@ async function selectFiles(files){
  const selected=Array.from(files);
  if(!selected.length)return;
  const validTypes=new Set(['image/jpeg','image/png','image/webp']);
- const existing=new Set(queue.map(x=>(filePath(x.file)).toLowerCase()+'|'+x.file.size+'|'+x.file.lastModified));
+ const existing=new Set(queue.map(x=>filePath(x.file).toLowerCase()+'|'+x.file.size+'|'+x.file.lastModified));
  let duplicates=0,invalid=0,overLimit=0,added=0;
  for(const file of selected){
   if(!(validTypes.has(file.type)||(!file.type&&/\.(png|jpe?g|webp)$/i.test(file.name)))||file.size<100||file.size>15*1024*1024){invalid++;continue;}
-  const key=(file.webkitRelativePath||file.name).toLowerCase()+'|'+file.size+'|'+file.lastModified;
+  const key=filePath(file).toLowerCase()+'|'+file.size+'|'+file.lastModified;
   if(existing.has(key)){duplicates++;continue;}
   if(queue.length>=MAX_BATCH_FILES){overLimit++;continue;}
   existing.add(key);
@@ -283,7 +283,7 @@ async function uploadQueue(){
  try{
   for(const item of work){
    if(cancel)break;
-   $('uploadStatus').textContent='Uploading '+(attempted+1)+' / '+count+' · '+(item.file.webkitRelativePath||item.file.name)+
+   $('uploadStatus').textContent='Uploading '+(attempted+1)+' / '+count+' · '+(filePath(item.file))+
     ' · '+success+' uploaded'+(failures.length?' · '+failures.length+' failed':'')+'. Keep this tab open.';
    try{
     const thumbnail=await thumb(item.file);
@@ -296,7 +296,7 @@ async function uploadQueue(){
     item.status='uploaded';item.error='';success++;
    }catch(e){
     item.status='failed';item.error=String(e?.message||'Upload failed');
-    failures.push((item.file.webkitRelativePath||item.file.name)+': '+item.error);
+    failures.push((filePath(item.file))+': '+item.error);
     // Once the session expires, stop automatically instead of turning 900 files into failures.
     if(!credential||/session expired|sign in again|admin session|access denied/i.test(item.error)){
      cancel=true;

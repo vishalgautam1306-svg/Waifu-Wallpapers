@@ -13,6 +13,9 @@ const SERIES=[
 ["One Piece",/one[\s_-]*piece|luffy|zoro|nami/i]
 ];
 let api='',credential='',queue=[],visible=[],adminItems=[],uploading=false,cancel=false,editing=null;
+const MAX_BATCH_FILES=1000,QUEUE_PAGE_SIZE=25;
+let queuePage=0;
+const queuePreviewUrls=[];
 let sessionExpiry=0,scanning=false;
 let activeTagInput=null,tagSuggestions=[],savedTagPresets=[];
 const TAG_PRESET_KEY='waifu-wallpapers-owner-tag-presets';
@@ -21,6 +24,7 @@ let catalogPage=0,catalogNext=null,reportsPage=0,reportsNext=null,adminSearchTer
 const urls=[];
 function blobUrl(blob){const url=URL.createObjectURL(blob);urls.push(url);return url;}
 function clearUrls(){for(const url of urls)URL.revokeObjectURL(url);urls.length=0;}
+function releaseQueuePreviews(){for(const url of queuePreviewUrls)URL.revokeObjectURL(url);queuePreviewUrls.length=0;}
 function escapeSource(name){return(name||"wallpaper").replace(/\.[^/.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();}
 function proposed(file){
  const name=escapeSource(file.name),source=(file.webkitRelativePath||'')+' '+file.name;
@@ -40,6 +44,9 @@ async function jsonOrThrow(response){
  let body={};try{body=await response.json();}catch(_){}
  if(response.status===401&&credential){logout();throw new Error('Admin session expired or revoked. Sign in again.');}
  if(!response.ok)throw new Error(body.error||"Request failed: "+response.status);
+ // The Worker renews active admin sessions for large sequential uploads.
+ // Keep the in-memory client expiry aligned with successful authenticated requests.
+ if(credential && sessionExpiry)sessionExpiry=Date.now()+30*60*1000;
  return body;
 }
 function setPanel(name){
@@ -88,11 +95,25 @@ function inputFor(row,key,label,max=100){
  wrap.append(inp);return wrap;
 }
 function renderQueue(){
- const list=$('queue');list.replaceChildren();
- $('queueCount').textContent=queue.length+' wallpapers queued';
- for(let i=0;i<queue.length;i++){
-  const item=queue[i];const card=node('div','queue-item');
-  const img=document.createElement('img');img.src=item.preview;img.alt='';
+ const list=$('queue');
+ releaseQueuePreviews();
+ list.replaceChildren();
+ const total=queue.length,pageCount=Math.max(1,Math.ceil(total/QUEUE_PAGE_SIZE));
+ queuePage=Math.max(0,Math.min(queuePage,pageCount-1));
+ const start=queuePage*QUEUE_PAGE_SIZE,end=Math.min(total,start+QUEUE_PAGE_SIZE);
+ const failed=queue.filter(x=>x.status==='failed').length;
+ const remaining=total-failed;
+ $('queueCount').textContent=total+' of '+MAX_BATCH_FILES+' wallpapers queued'+(failed?' · '+failed+' failed / retryable':'')+(remaining?' · '+remaining+' ready':'');
+ $('queuePager').hidden=total<=QUEUE_PAGE_SIZE;
+ $('queuePageLabel').textContent=total?'Showing '+(start+1)+'–'+end+' of '+total+' · Page '+(queuePage+1)+' / '+pageCount:'No queued wallpapers';
+ $('queuePrev').disabled=uploading||queuePage===0;
+ $('queueNext').disabled=uploading||queuePage>=pageCount-1;
+ const frag=document.createDocumentFragment();
+ for(let i=start;i<end;i++){
+  const item=queue[i],card=node('div','queue-item');
+  const img=document.createElement('img');
+  img.loading='lazy';img.alt='Preview for '+item.file.name;
+  const previewUrl=URL.createObjectURL(item.file);queuePreviewUrls.push(previewUrl);img.src=previewUrl;
   const fields=node('div','queue-fields');
   fields.append(inputFor(item,'title','Title',90),inputFor(item,'series','Series',100));
   const desc=inputFor(item,'description','Description',450);desc.classList.add('wide');fields.append(desc);
@@ -101,31 +122,43 @@ function renderQueue(){
   const sel=document.createElement('select');sel.setAttribute('aria-label','Category for '+item.title);
   for(const [key,val] of Object.entries(CATEGORIES))sel.append(new Option(val,key));
   sel.value=item.category;sel.addEventListener('change',()=>{item.category=sel.value;});
-  card.append(img,fields,sel);list.append(card);
+  const info=node('div','queue-info');
+  const path=node('span','file-path',(item.file.webkitRelativePath||item.file.name)+' · '+(item.file.size/1048576).toFixed(1)+' MB');
+  const state=node('span','upload-state '+(item.status==='failed'?'failed':'pending'),item.status==='failed'?'Retry required':'Ready to upload');
+  info.append(path,state);
+  if(item.error)info.append(node('span','upload-error',item.error.slice(0,140)));
+  card.append(img,fields,sel,info);
+  if(uploading)for(const control of card.querySelectorAll('input,select'))control.disabled=true;
+  frag.append(card);
  }
- $('startUpload').disabled=!queue.length||uploading||scanning;
+ list.append(frag);
+ $('startUpload').disabled=!total||uploading||scanning;
  $('analyzeQueue').disabled=!queue.some(x=>!x.aiScanned)||uploading||scanning;
 }
 async function selectFiles(files){
- if(uploading)return;
- const valid=['image/jpeg','image/png','image/webp'];
- const list=[...files];
- if(!list.length)return;
- if(list.length>500){$('uploadStatus').textContent='Select up to 500 images at a time. Repeat with more batches.';return;}
- const existing=new Set(queue.map(q=>q.file.name.toLowerCase()+'|'+q.file.size));
- let skipped=0;
- for(const file of list){
-  if(!valid.includes(file.type)||file.size>15*1024*1024||file.size<100){skipped++;continue;}
-  const key=file.name.toLowerCase()+'|'+file.size;
-  if(existing.has(key)){skipped++;continue;}
-  if(queue.length>=500){skipped++;continue;}
+ if(uploading||scanning)return;
+ const selected=Array.from(files);
+ if(!selected.length)return;
+ const validTypes=new Set(['image/jpeg','image/png','image/webp']);
+ const existing=new Set(queue.map(x=>(x.file.webkitRelativePath||x.file.name).toLowerCase()+'|'+x.file.size+'|'+x.file.lastModified));
+ let duplicates=0,invalid=0,overLimit=0,added=0;
+ for(const file of selected){
+  if(!(validTypes.has(file.type)||(!file.type&&/\.(png|jpe?g|webp)$/i.test(file.name)))||file.size<100||file.size>15*1024*1024){invalid++;continue;}
+  const key=(file.webkitRelativePath||file.name).toLowerCase()+'|'+file.size+'|'+file.lastModified;
+  if(existing.has(key)){duplicates++;continue;}
+  if(queue.length>=MAX_BATCH_FILES){overLimit++;continue;}
   existing.add(key);
-  const meta=proposed(file);
-  queue.push({file,...meta,preview:blobUrl(file)});
+  queue.push({file,...proposed(file),status:'pending',error:'',uploadRequestId:crypto.randomUUID(),aiScanned:false});
+  added++;
  }
  renderQueue();
- $('uploadStatus').textContent=queue.length+' valid images queued'+(skipped?' · '+skipped+' skipped (unsupported, duplicate or over limit)':'')+'. Review suggested metadata before uploading.';
+ $('uploadStatus').textContent=added+' wallpaper(s) added · '+queue.length+'/'+MAX_BATCH_FILES+' total'+
+ (invalid?' · '+invalid+' skipped (format or 15 MB limit)':'')+
+ (duplicates?' · '+duplicates+' already queued':'')+
+ (overLimit?' · '+overLimit+' over the 1,000-file queue limit':'')+
+ '. All files are kept as private drafts until you publish them.';
 }
+
 function thumb(file){
  return new Promise(async(resolve,reject)=>{
   let bitmap;
@@ -197,50 +230,60 @@ async function suggestForEdit(){
  }catch(e){$('editStatus').textContent="AI scan unavailable: "+e.message;}
  finally{scanning=false;$('editAI').disabled=false;}
 }
+function setBulkProgress(attempted,total){
+ const percentage=total?Math.round(attempted/total*100):0;
+ $('meter').style.width=percentage+'%';
+ $('uploadProgress').setAttribute('aria-valuenow',String(percentage));
+}
 async function uploadQueue(){
- if(uploading||!queue.length)return;
- uploading=true;cancel=false;$('startUpload').disabled=true;$('analyzeQueue').disabled=true;$('cancelUpload').disabled=false;
- const count=queue.length;let success=0;const failures=[];
+ if(uploading||scanning||!queue.length)return;
+ const work=queue.filter(item=>item.status!=='uploaded');
+ if(!work.length)return;
+ uploading=true;cancel=false;
+ let attempted=0,success=0;
+ const failures=[],count=work.length;
+ setBulkProgress(0,count);renderQueue();$('cancelUpload').disabled=false;
  try{
-  for(let i=0;i<count;i++){
+  for(const item of work){
    if(cancel)break;
-   const item=queue[i];
-   $('uploadStatus').textContent='Uploading '+(i+1)+' / '+count+' · '+item.file.name;
-   $('meter').style.width=Math.round(100*i/count)+'%';
+   $('uploadStatus').textContent='Uploading '+(attempted+1)+' / '+count+' · '+(item.file.webkitRelativePath||item.file.name)+
+    ' · '+success+' uploaded'+(failures.length?' · '+failures.length+' failed':'')+'. Keep this tab open.';
    try{
     const thumbnail=await thumb(item.file);
-    const data=new FormData();data.append('image',item.file);data.append('thumbnail',thumbnail);
+    const data=new FormData();
+    data.append('image',item.file);
+    data.append('thumbnail',thumbnail);
+    data.append('upload_request_id',item.uploadRequestId);
     for(const k of ['title','series','category','description','tags','credit'])data.append(k,item[k]||'');
     await jsonOrThrow(await request('/api/admin/upload',{method:'POST',body:data}));
-    success++;
-   }catch(e){failures.push(item.file.name+': '+e.message);}
+    item.status='uploaded';item.error='';success++;
+   }catch(e){
+    item.status='failed';item.error=String(e?.message||'Upload failed');
+    failures.push((item.file.webkitRelativePath||item.file.name)+': '+item.error);
+    // Once the session expires, stop automatically instead of turning 900 files into failures.
+    if(!credential||/session expired|sign in again|admin session|access denied/i.test(item.error)){
+     cancel=true;
+    }
+   }
+   attempted++;setBulkProgress(attempted,count);
+   if(attempted%20===0)renderQueue();
   }
-  $('meter').style.width=Math.round(100*(success+failures.length)/count)+'%';
-  if(!cancel&&success===count){queue=[];clearUrls();renderQueue();}
-  else{
-   const completed=success+failures.length;
-   queue=queue.slice(completed);renderQueue();
-  }
-  $('uploadStatus').textContent=success+' drafts uploaded'+(failures.length?' · '+failures.length+' failed: '+failures.slice(0,3).join(' | '):'')+(cancel?' · Stopped early':'')+'. Drafts stay private until published.';
- }finally{uploading=false;$('startUpload').disabled=!queue.length;$('cancelUpload').disabled=true;renderQueue();}
+ }finally{
+  // Successfully uploaded files must NEVER be re-uploaded when retrying the remainder.
+  queue=queue.filter(item=>item.status!=='uploaded');
+  queuePage=Math.min(queuePage,Math.max(0,Math.ceil(queue.length/QUEUE_PAGE_SIZE)-1));
+  uploading=false;$('cancelUpload').disabled=true;
+  renderQueue();
+  const pending=queue.filter(x=>x.status!=='failed').length;
+  $('uploadStatus').textContent=success+' draft(s) uploaded this run'+
+   (failures.length?' · '+failures.length+' failed and kept for retry':'')+
+   (pending?' · '+pending+' not yet attempted':'')+
+   (cancel?' · stopped (or session needs sign-in)':'')+
+   '. '+(queue.length?'Use Upload drafts securely again to retry/continue.':'All selected wallpapers uploaded as private drafts.');
+  if(!queue.length)setBulkProgress(count,count);
+ }
 }
-async function preview(id,img){
- try{
-  const res=await request('/api/admin/wallpapers/'+id+'/thumb');
-  if(!res.ok)throw new Error('No thumbnail');
-  img.src=blobUrl(await res.blob());
- }catch(_){img.alt='Preview unavailable';}
-}
-function normalizeLookup(value){
- const raw=String(value||"").trim();
- const uuid=raw.match(/[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}/i);
- return uuid?uuid[0].toLowerCase():raw.slice(0,140);
-}
-function updateCatalogPagination(){
- $('adminPageCount').textContent='Page '+(catalogPage+1);
- $('adminPrev').disabled=catalogPage<=0;
- $('adminNext').disabled=catalogNext===null;
-}
+
 async function refresh(){
  if(!credential)return;
  $('manageStatus').textContent='Searching your catalog…';
@@ -544,9 +587,15 @@ function bind(){
  $('refreshModeration').addEventListener('click',loadAdminMessages);
  $('statusFilter').addEventListener('change',()=>{adminStatus=$('statusFilter').value;catalogPage=0;refresh();});
  $('refresh').addEventListener('click',refresh);
+ $('queuePrev').addEventListener('click',()=>{if(!uploading&&queuePage>0){queuePage--;renderQueue();}});
+ $('queueNext').addEventListener('click',()=>{if(!uploading&&(queuePage+1)*QUEUE_PAGE_SIZE<queue.length){queuePage++;renderQueue();}});
  $('files').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});
  $('folder').addEventListener('change',e=>{selectFiles(e.target.files);e.target.value='';});
- $('clearQueue').addEventListener('click',()=>{if(uploading)return;clearUrls();queue=[];renderQueue();});
+ $('clearQueue').addEventListener('click',()=>{
+  if(uploading)return;
+  if(queue.length&&!confirm('Clear '+queue.length+' not-yet-uploaded file(s) from this browser queue? This does not affect uploaded drafts.'))return;
+  queue=[];queuePage=0;releaseQueuePreviews();setBulkProgress(0,0);renderQueue();$('uploadStatus').textContent='Queue cleared.';
+ });
  $('startUpload').addEventListener('click',uploadQueue);
  $('analyzeQueue').addEventListener('click',analyzeQueue);
  $('editAI').addEventListener('click',suggestForEdit);
@@ -572,7 +621,10 @@ function bind(){
   if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)d.close();
  });
  renderTagTools();
- window.addEventListener('pagehide',()=>{credential='';sessionExpiry=0;clearUrls();});
+ window.addEventListener('beforeunload',event=>{
+  if(uploading){event.preventDefault();event.returnValue='';}
+ });
+ window.addEventListener('pagehide',()=>{credential='';sessionExpiry=0;releaseQueuePreviews();clearUrls();});
 }
 document.addEventListener('DOMContentLoaded',()=>{
  bind();

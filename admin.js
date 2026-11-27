@@ -16,6 +16,8 @@ let api='',credential='',queue=[],visible=[],adminItems=[],uploading=false,cance
 const MAX_BATCH_FILES=1000,QUEUE_PAGE_SIZE=25;
 let queuePage=0;
 const queuePreviewUrls=[];
+const droppedFolderPaths=new WeakMap();
+function filePath(file){return droppedFolderPaths.get(file)||filePath(file);}
 let sessionExpiry=0,scanning=false;
 let activeTagInput=null,tagSuggestions=[],savedTagPresets=[];
 const TAG_PRESET_KEY='waifu-wallpapers-owner-tag-presets';
@@ -27,7 +29,7 @@ function clearUrls(){for(const url of urls)URL.revokeObjectURL(url);urls.length=
 function releaseQueuePreviews(){for(const url of queuePreviewUrls)URL.revokeObjectURL(url);queuePreviewUrls.length=0;}
 function escapeSource(name){return(name||"wallpaper").replace(/\.[^/.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();}
 function proposed(file){
- const name=escapeSource(file.name),source=(file.webkitRelativePath||'')+' '+file.name;
+ const name=escapeSource(file.name),source=filePath(file)+' '+file.name;
  const series=SERIES.find(([_,re])=>re.test(source))?.[0]||'';
  const raw=source.toLowerCase();
  let category=series?"anime":/beach|ocean|sky|forest|sakura|mountain|landscape|garden/.test(raw)?"nature":/bedroom|aesthetic|pastel|rain|cozy|city/.test(raw)?"aesthetic":/oled|black|dark/.test(raw)?"oled":/cyberpunk|robot|mecha|sci-fi/.test(raw)?"scifi":"anime";
@@ -123,7 +125,7 @@ function renderQueue(){
   for(const [key,val] of Object.entries(CATEGORIES))sel.append(new Option(val,key));
   sel.value=item.category;sel.addEventListener('change',()=>{item.category=sel.value;});
   const info=node('div','queue-info');
-  const path=node('span','file-path',(item.file.webkitRelativePath||item.file.name)+' · '+(item.file.size/1048576).toFixed(1)+' MB');
+  const path=node('span','file-path',(filePath(item.file))+' · '+(item.file.size/1048576).toFixed(1)+' MB');
   const state=node('span','upload-state '+(item.status==='failed'?'failed':'pending'),item.status==='failed'?'Retry required':'Ready to upload');
   info.append(path,state);
   if(item.error)info.append(node('span','upload-error',item.error.slice(0,140)));
@@ -140,7 +142,7 @@ async function selectFiles(files){
  const selected=Array.from(files);
  if(!selected.length)return;
  const validTypes=new Set(['image/jpeg','image/png','image/webp']);
- const existing=new Set(queue.map(x=>(x.file.webkitRelativePath||x.file.name).toLowerCase()+'|'+x.file.size+'|'+x.file.lastModified));
+ const existing=new Set(queue.map(x=>(filePath(x.file)).toLowerCase()+'|'+x.file.size+'|'+x.file.lastModified));
  let duplicates=0,invalid=0,overLimit=0,added=0;
  for(const file of selected){
   if(!(validTypes.has(file.type)||(!file.type&&/\.(png|jpe?g|webp)$/i.test(file.name)))||file.size<100||file.size>15*1024*1024){invalid++;continue;}
@@ -229,6 +231,41 @@ async function suggestForEdit(){
   $('editStatus').textContent="AI draft ready. Check possible mistakes, then click Save metadata to apply changes.";
  }catch(e){$('editStatus').textContent="AI scan unavailable: "+e.message;}
  finally{scanning=false;$('editAI').disabled=false;}
+}
+// Chrome/Edge drag-and-drop folder support, including nested folders.
+// Directory entries must be captured synchronously in the drop event.
+async function readFolderEntry(entry,prefix,acc){
+ if(acc.length>=MAX_BATCH_FILES*3)return;
+ if(entry.isFile){
+  const file=await new Promise((resolve,reject)=>entry.file(resolve,reject));
+  droppedFolderPaths.set(file,prefix+file.name);
+  acc.push(file);
+  return;
+ }
+ if(!entry.isDirectory)return;
+ const reader=entry.createReader();
+ for(;;){
+  const entries=await new Promise((resolve,reject)=>reader.readEntries(resolve,reject));
+  if(!entries.length)break;
+  for(const child of entries){
+   if(acc.length>=MAX_BATCH_FILES*3)return;
+   await readFolderEntry(child,prefix+entry.name+'/',acc);
+  }
+ }
+}
+async function selectDropEntries(entries,fallback){
+ if(uploading||scanning)return;
+ if(!entries.length){await selectFiles(fallback);return;}
+ $('uploadStatus').textContent='Reading dropped folder and nested image files…';
+ const list=[];
+ try{
+  for(const entry of entries){
+   if(list.length>=MAX_BATCH_FILES*3)break;
+   await readFolderEntry(entry,'',list);
+  }
+  await selectFiles(list);
+  if(list.length>=MAX_BATCH_FILES*3)$('uploadStatus').textContent+=' Folder scan capped at 3,000 items; select smaller folders to include additional images.';
+ }catch(e){$('uploadStatus').textContent='Could not read dropped folder: '+e.message+'. Use Choose a folder instead.';}
 }
 function setBulkProgress(attempted,total){
  const percentage=total?Math.round(attempted/total*100):0;
@@ -605,7 +642,12 @@ function bind(){
  const box=$('dropzone');
  ['dragover','dragenter'].forEach(event=>box.addEventListener(event,e=>{e.preventDefault();box.classList.add('drag');}));
  ['drop','dragleave'].forEach(event=>box.addEventListener(event,e=>{e.preventDefault();box.classList.remove('drag');}));
- box.addEventListener('drop',e=>selectFiles(e.dataTransfer.files));
+ box.addEventListener('drop',e=>{
+  const transfer=e.dataTransfer;
+  const entries=Array.from(transfer.items||[]).map(item=>item.webkitGetAsEntry?.()).filter(Boolean);
+  const files=Array.from(transfer.files||[]);
+  selectDropEntries(entries,files);
+ });
  for(const [key,val] of Object.entries(CATEGORIES))$('editCategory').append(new Option(val,key));
  $('applyBulkTags').addEventListener('click',applyBulkTags);
  $('saveTagPreset').addEventListener('click',()=>saveCurrentTagPreset($('presetName').value.trim()));

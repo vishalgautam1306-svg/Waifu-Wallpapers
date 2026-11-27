@@ -309,6 +309,7 @@ async function upload(request,env){
   await Promise.allSettled([env.IMAGES.delete(originalKey),env.IMAGES.delete(thumbKey)]);
   throw error;
  }
+ await touchGallery(env);
  await audit(env,"upload", (await fingerprints(request,env)).ip, id);
  return reply(request,env,{id,status:"draft",message:"Added to private admin drafts"},201);
 }
@@ -323,6 +324,7 @@ async function edit(request,env,id){
  const tagList=body.tags===undefined?JSON.parse(row.tags_json||"[]"):tags(body.tags);
  await env.DB.prepare("UPDATE wallpapers SET title=?,description=?,series=?,credit=?,category=?,tags_json=?,updated_at=? WHERE id=?")
   .bind(title,desc,series,credit,category,JSON.stringify(tagList),Date.now(),id).run();
+ await touchGallery(env);
  await audit(env,"metadata_edit", (await fingerprints(request,env)).ip, id);
  return reply(request,env,{id,message:"Updated"});
 }
@@ -332,6 +334,7 @@ async function change(request,env,id){
  const body=await request.json().catch(()=>null);
  if(!["draft","approved","removed"].includes(body?.status))return fail(request,env,400,"Invalid status");
  await env.DB.prepare("UPDATE wallpapers SET status=?,updated_at=? WHERE id=?").bind(body.status,Date.now(),id).run();
+ await touchGallery(env);
  await audit(env,"visibility_"+body.status,(await fingerprints(request,env)).ip,id);
  return reply(request,env,{id,status:body.status});
 }
@@ -522,6 +525,48 @@ async function adjacentWallpaper(request,env,id){
  return reply(request,env,{previous:prev||null,next:next||null});
 }
 
+
+async function touchGallery(env){
+ await env.DB.prepare("UPDATE catalog_state SET revision=revision+1 WHERE key='public'").run();
+}
+async function galleryVersion(request,env){
+ const row=await env.DB.prepare("SELECT revision FROM catalog_state WHERE key='public'").first();
+ return reply(request,env,{revision:row?.revision||1});
+}
+async function validatePublished(request,env){
+ // A single bounded batch verifies that stale client-side gallery/favorite IDs are still public.
+ if(!validCommunityOrigin(request,env))return fail(request,env,403,"Invalid gallery origin");
+ if(!(request.headers.get("Content-Type")||"").startsWith("application/json"))return fail(request,env,415,"JSON required");
+ if(Number(request.headers.get("Content-Length")||0)>10500)return fail(request,env,413,"Too many wallpapers to validate");
+ const body=await request.json().catch(()=>null),ids=body?.ids;
+ if(!Array.isArray(ids)||!ids.length||ids.length>120||ids.some(id=>typeof id!=="string"||!/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(id)))return fail(request,env,400,"Provide 1–120 wallpaper IDs");
+ const unique=[...new Set(ids.map(id=>id.toLowerCase()))];
+ const rows=await env.DB.prepare("SELECT id FROM wallpapers WHERE status='approved' AND id IN ("+unique.map(()=>"?").join(",")+")").bind(...unique).all();
+ return reply(request,env,{activeIds:(rows.results||[]).map(x=>x.id)});
+}
+async function permanentlyDeleteWallpaper(request,env,id){
+ // Deliberate two-step deletion: only previously removed/hidden wallpapers are eligible.
+ const row=await env.DB.prepare("SELECT id,title,status,original_key,thumb_key FROM wallpapers WHERE id=?").bind(id).first();
+ if(!row)return fail(request,env,404,"Wallpaper not found");
+ if(row.status!=="removed")return fail(request,env,409,"Remove the wallpaper from the catalog before permanently deleting it.");
+ const goodOriginal=new RegExp("^originals/"+id+"\\.(png|jpg|webp)$","i").test(row.original_key);
+ const goodThumb=new RegExp("^thumbs/"+id+"\\.(png|jpg|webp)$","i").test(row.thumb_key);
+ if(!goodOriginal||!goodThumb||row.original_key===row.thumb_key)return fail(request,env,500,"Unexpected storage keys: deletion refused");
+ // Never remove the D1 row when an R2 deletion fails; this leaves a retryable removed record.
+ try{
+  await env.IMAGES.delete([row.original_key,row.thumb_key]);
+ }catch(e){console.error("R2 delete failed",id);return fail(request,env,502,"Storage deletion failed. Wallpaper is still hidden; retry.");}
+ try{
+  await env.DB.batch([
+   env.DB.prepare("DELETE FROM wallpaper_reports WHERE wallpaper_id=?").bind(id),
+   env.DB.prepare("DELETE FROM wallpapers WHERE id=? AND status='removed'").bind(id),
+   env.DB.prepare("UPDATE catalog_state SET revision=revision+1 WHERE key='public'")
+  ]);
+ }catch(e){console.error("D1 cleanup failed after R2 delete",id);return fail(request,env,500,"Image files removed but record cleanup failed. The wallpaper remains hidden; retry deletion.");}
+ await audit(env,"wallpaper_deleted",(await fingerprints(request,env)).ip,id);
+ return reply(request,env,{deleted:true,id,message:"Wallpaper, thumbnail and catalog record permanently deleted"});
+}
+
 export default {
  async fetch(request,env){
   const url=new URL(request.url),path=url.pathname.replace(/\/+$/,"")||"/";
@@ -530,9 +575,11 @@ export default {
    return new Response(null,{status:h.has("Access-Control-Allow-Origin")?204:403,headers:h});
   }
   try{
-   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:10});
+   if(path==="/api/health"&&request.method==="GET")return reply(request,env,{ok:true,version:11});
    if(path==="/api/config"&&request.method==="GET")return reply(request,env,{maxImageBytes:MAX_IMAGE,guestUpload:false,adminOnly:true,aiSuggestions:"admin-only-on-demand"});
    if(path==="/api/gallery"&&request.method==="GET")return listPublic(request,env);
+   if(path==="/api/gallery/version"&&request.method==="GET")return galleryVersion(request,env);
+   if(path==="/api/gallery/validate"&&request.method==="POST")return validatePublished(request,env);
    const artworkReport=/^\/api\/wallpapers\/([\da-f-]{36})\/report$/.exec(path);
    if(artworkReport&&request.method==="POST")return reportWallpaper(request,env,artworkReport[1]);
    const detail=/^\/api\/wallpapers\/([\da-f-]{36})$/.exec(path);
@@ -576,6 +623,7 @@ export default {
     if(path==="/api/admin/list"&&request.method==="GET")return listAdmin(request,env);
     const wallpaperAdmin=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);
     if(wallpaperAdmin&&request.method==="GET")return adminWallpaperById(request,env,wallpaperAdmin[1]);
+    if(wallpaperAdmin&&request.method==="DELETE")return permanentlyDeleteWallpaper(request,env,wallpaperAdmin[1]);
     if(path==="/api/admin/upload"&&request.method==="POST")return upload(request,env);
     const editPath=/^\/api\/admin\/wallpapers\/([\da-f-]{36})$/.exec(path);
     if(editPath&&request.method==="PATCH")return edit(request,env,editPath[1]);

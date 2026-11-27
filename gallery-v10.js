@@ -68,7 +68,9 @@ async function refreshCatalogFromServer(){
   if(favoritesPage){
    if(remote!==catalogRevision){await cleanFavorites();catalogRevision=remote;}
   }else if(remote!==catalogRevision){
-   if(items.length){
+   if(!items.length){
+    nextPage=0;loadedPages=0;await load();
+   }else{
     const valid=await activeIdsFor(items);
     const removed=items.length;
     items=items.filter(x=>valid.has(x.id));

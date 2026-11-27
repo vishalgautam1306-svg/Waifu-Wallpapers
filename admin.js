@@ -265,8 +265,19 @@ async function refresh(){
    const edit=node('button','secondary','✎ Edit details');edit.type='button';edit.addEventListener('click',()=>openEdit(item));
    const publish=node('button','primary',item.status==='approved'?'Unpublish':'Publish');
    publish.type='button';publish.addEventListener('click',()=>changeStatus(item,item.status==='approved'?'draft':'approved'));
-   const remove=node('button','secondary','Remove');remove.type='button';remove.addEventListener('click',()=>changeStatus(item,'removed'));
-   actions.append(edit,publish,remove);row.append(img,meta,actions);list.append(row);
+   // "Remove" hides it from the public archive; actual storage deletion is a separate irreversible step.
+   if(item.status==='removed'){
+    const purge=node('button','secondary permanent-delete','Delete permanently');
+    purge.type='button';purge.title='Delete original and thumbnail from Cloudflare R2 plus database record';
+    purge.addEventListener('click',()=>permanentlyDelete(item));
+    actions.append(edit,publish,purge);
+   }else{
+    const remove=node('button','secondary','Remove from catalog');
+    remove.type='button';remove.title='Unpublish and move to Removed. Files remain in storage until permanently deleted.';
+    remove.addEventListener('click',()=>changeStatus(item,'removed'));
+    actions.append(edit,publish,remove);
+   }
+   row.append(img,meta,actions);list.append(row);
   }
   updateCatalogPagination();
  }catch(e){$('manageStatus').textContent='Cannot search catalog: '+e.message;catalogNext=null;updateCatalogPagination();}
@@ -333,8 +344,20 @@ async function updateReportStatus(id,status){
   await refreshReports();
  }catch(e){$('reportsFeedback').textContent='Could not update report: '+e.message;}
 }
+async function permanentlyDelete(item){
+ if(item.status!=='removed')return;
+ const response=prompt('PERMANENT DELETION: This destroys both Cloudflare R2 image files AND the catalog record. It cannot be undone.\n\nWallpaper: '+item.title+'\n\nType DELETE to confirm:');
+ if(response!=='DELETE')return;
+ if(!confirm('Final confirmation: permanently delete "'+item.title+'"?'))return;
+ $('manageStatus').textContent='Permanently deleting '+item.title+' from Cloudflare R2 and D1…';
+ try{
+  const result=await jsonOrThrow(await request('/api/admin/wallpapers/'+encodeURIComponent(item.id),{method:'DELETE'}));
+  $('manageStatus').textContent=result.message||'Wallpaper permanently deleted.';
+  await refresh();
+ }catch(e){$('manageStatus').textContent='Permanent deletion failed: '+e.message+' (check Removed status and retry).';}
+}
 async function changeStatus(item,status){
- if(status==='removed'&&!confirm('Unpublish and mark "'+item.title+'" as removed?'))return;
+ if(status==='removed'&&!confirm('Move "'+item.title+'" to Removed? This hides it publicly but DOES NOT delete cloud files. To permanently erase it, open Removed and click Delete permanently.'))return;
  if(status==='approved'&&!confirm('Publish "'+item.title+'" for every visitor to view and download?'))return;
  try{
   await jsonOrThrow(await request('/api/admin/wallpapers/'+item.id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}));

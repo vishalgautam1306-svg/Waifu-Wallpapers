@@ -87,3 +87,22 @@
 .deletion-explainer strong{color:#ffdae9}
 .manage-actions button.permanent-delete{background:#55212b;border-color:#e69aa6;color:#ffe6ed;min-height:44px}
 .manage-actions button.permanent-delete:hover{background:#7a2839}
+
+
+/* V12: thousand-file, low-memory, folder-capable owner uploader */
+.bulk-safety-note{margin:12px 0 15px;padding:12px 15px;border:1px solid #b59bde46;border-radius:10px;background:#271d38;color:#c6b4d6;font:500 11px/1.7 'DM Sans',sans-serif}
+.queue-pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0 13px;padding:11px 14px;border:1px solid #bca8db3b;border-radius:11px;background:#1d162b}
+.queue-pager span{font-size:11px;color:#e6cef9;font-weight:800;white-space:nowrap}
+.queue-pager button{min-height:44px;font-size:11px;white-space:nowrap}
+.queue-pager[hidden]{display:none!important}
+.queue-item .queue-info{display:flex;grid-column:1/-1;gap:9px;flex-wrap:wrap;align-items:center;color:#bdaed1;min-width:0;font-size:10px}
+.queue-info .file-path{overflow-wrap:anywhere;min-width:0;flex:1}
+.queue-info .upload-state{font-weight:800;padding:4px 8px;border-radius:99px;border:1px solid #bfa7d25e}
+.queue-info .upload-state.failed{border-color:#e0a0a8a1;color:#ffd2d8}
+.queue-info .upload-state.pending{color:#c7b8dc}
+.queue-item select{min-height:44px}
+.queue-item img{background:#171022}
+#uploadProgress{height:10px}
+#uploadStatus{line-height:1.75;min-height:22px}
+@media(max-width:800px){.queue-item{grid-template-columns:70px minmax(0,1fr)}.queue-item select{grid-column:2;max-width:100%;width:100%}.queue-item .queue-info{grid-column:1/-1}.queue-pager{padding:10px;gap:8px}}
+@media(max-width:480px){.queue-pager{flex-wrap:wrap}.queue-pager span{order:-1;width:100%;text-align:center}.queue-pager button{flex:1}.uploadtools{flex-wrap:wrap}.uploadtools button{min-height:44px}}
